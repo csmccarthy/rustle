@@ -1,0 +1,9 @@
+var test = 1234.5678; // Assign number
+var test2 = 1234. // No end period
+var test3 = true or false
+var test4 = "Multiline
+String... Woah" // Pretty cool
+/*/*test++;
+print test*/
+print hehe*/
+print "Hello, World!"
