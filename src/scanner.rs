@@ -44,6 +44,27 @@ pub enum Tokens {
     EOF
 }
 
+lazy_static! {
+    static ref KEYWORD_MAP: HashMap<String, Tokens> = HashMap::from([
+        (String::from("and"), Tokens::And),
+        (String::from("class"), Tokens::Class),
+        (String::from("else"), Tokens::Else),
+        (String::from("false"), Tokens::False),
+        (String::from("fun"), Tokens::Fun),
+        (String::from("for"), Tokens::For),
+        (String::from("if"), Tokens::If),
+        (String::from("nil"), Tokens::Nil),
+        (String::from("or"), Tokens::Or),
+        (String::from("print"), Tokens::Print),
+        (String::from("return"), Tokens::Return),
+        (String::from("super"), Tokens::Super),
+        (String::from("this"), Tokens::This),
+        (String::from("true"), Tokens::True),
+        (String::from("var"), Tokens::Var),
+        (String::from("while"), Tokens::While),
+    ]);
+}
+
 const CAPS: RangeInclusive<char> = RangeInclusive::new('A', 'Z');
 const LOWERS: RangeInclusive<char> = RangeInclusive::new('a', 'z');
 const NUMS: RangeInclusive<char> = RangeInclusive::new('0', '9');
@@ -88,7 +109,6 @@ pub struct Scanner
     source: String,
     pub line: u16,
     pub tokens: Vec<Token>,
-    keyword_hash: HashMap<String, Tokens>,
 }
 
 impl Scanner {
@@ -100,24 +120,6 @@ impl Scanner {
             source,
             line: 1,
             tokens: Vec::new(),
-            keyword_hash: HashMap::from([
-                (String::from("and"), Tokens::And),
-                (String::from("class"), Tokens::Class),
-                (String::from("else"), Tokens::Else),
-                (String::from("false"), Tokens::False),
-                (String::from("fun"), Tokens::Fun),
-                (String::from("for"), Tokens::For),
-                (String::from("if"), Tokens::If),
-                (String::from("nil"), Tokens::Nil),
-                (String::from("or"), Tokens::Or),
-                (String::from("print"), Tokens::Print),
-                (String::from("return"), Tokens::Return),
-                (String::from("super"), Tokens::Super),
-                (String::from("this"), Tokens::This),
-                (String::from("true"), Tokens::True),
-                (String::from("var"), Tokens::Var),
-                (String::from("while"), Tokens::While),
-            ])
         }
     }
     
@@ -283,7 +285,7 @@ impl Scanner {
                         NUMS.contains(char)
                     }) {}
                     let text = self.get_source_range(0, 0);
-                    if let Some(token_type) = self.keyword_hash.get(&text) {
+                    if let Some(token_type) = KEYWORD_MAP.get(&text) {
                         self.add_token(token_type.clone());
                     }
                     else { self.add_token_literal(Tokens::Identifier, 0, 0); }

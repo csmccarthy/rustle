@@ -1,18 +1,22 @@
+#[macro_use]
+extern crate lazy_static;
+
 mod scanner;
 mod error_reporter;
 mod parser;
 mod exprs;
+mod evaluator;
 
 
 use scanner::Scanner;
 // use scanner::{ Token, Tokens, Literal as LiteralValue };
 use error_reporter::ErrorReporter;
-// use exprs::{ Binary, Literal, Unary, Grouping };
+use evaluator::{ ASTEvaluator };
 use parser::{ Parser };
 
 use std::fs::File;
 use std::path::Path;
-use std::io::{ self, Read };
+use std::io::{ self, Read, Write };
 
 
 
@@ -20,21 +24,26 @@ fn run(line: String) { // Should use bytes instead of String
     let mut scanner = Scanner::new(line.to_owned());
     let reporter = ErrorReporter;
     scanner.scan_tokens(reporter);
-    for token in &scanner.tokens {
-        println!("{:?}", token.token_type);
-    }
+    // for token in &scanner.tokens {
+    //     println!("{:?}", token.token_type);
+    // }
     let mut parser = Parser::new(scanner.tokens);
     parser.parse();
+    println!("Errors:");
     for err in parser.errs {
         eprintln!("{}", err);
     }
-    // if let Err(e) = expressions {
-    //     eprintln!("Error parsing document: {}", e)
-    // } else if let Ok(exprs) = expressions {
+    println!("\nStatements:");
+    let eval = ASTEvaluator;
     for expr in parser.exprs {
-        println!("{}", expr);
+        print!("{} →  ", expr);
+        if io::stdout().flush().is_err() { eprintln!("Issue flushing expression to stdout") };
+        let res = expr.evaluate(&eval);
+        match res {
+            Err(_e) => eprintln!("Runtime Error :("),
+            Ok(val) => println!("{}", val),
+        }
     }
-    // }
 }
 
 
