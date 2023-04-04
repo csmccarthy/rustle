@@ -8,6 +8,7 @@ mod exprs;
 mod evaluator;
 mod stmts;
 mod declarator;
+mod environment;
 
 
 use scanner::{ Scanner };
@@ -17,6 +18,7 @@ use error_reporter::ErrorReporter;
 use declarator::{ ASTDeclarator };
 use parser::{ Parser, SyntaxError };
 use stmts::{ Stmt };
+use environment::{ Environment };
 
 use std::fs::File;
 use std::path::Path;
@@ -43,7 +45,8 @@ fn run(line: String) { // Should use bytes instead of String
     // println!("\nStatements:");
     let stmts_ref: &Vec<Box<dyn Stmt>> = &parser.stmts;
     {
-        let mut decl = ASTDeclarator::new();
+        let mut env = Environment::new();
+        let mut decl = ASTDeclarator::new(&mut env);
         for stmt in stmts_ref {
             // print!("{} →  ", stmt);
             if io::stdout().flush().is_err() { eprintln!("Issue flushing statement to stdout") };
@@ -65,7 +68,7 @@ fn main() {
     // let printer = AstPrinter;
     // printer.print(&expression4);
 
-    let path = Path::new("example2.rulox");
+    let path = Path::new("example.rulox");
     let file = match File::open(&path) {
         Err(e) => panic!("Couldn't open {}: {}", path.display(), e),
         Ok(file) => file

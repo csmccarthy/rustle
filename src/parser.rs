@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign };
-use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt };
+use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt };
 use crate::scanner::{ Token, Tokens, Literal as LiteralValue };
 
 pub struct Parser {
@@ -96,7 +96,27 @@ impl Parser {
 
     fn stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
         if self.match_token(Tokens::Print) { return Ok(self.print_stmt()?) }
+        else if self.match_token(Tokens::LeftBrace) { return Ok(self.block()?) }
         self.expression_stmt()
+    }
+
+    fn block(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let mut stmts = Vec::new();
+        while self.peek().is_some()
+                && !self.match_token(Tokens::EOF)
+                && !self.match_token(Tokens::RightBrace)
+        {
+            let stmt = self.declaration()?;
+            let needs_semicolon = stmt.needs_semicolon();
+            stmts.push(stmt);
+            if needs_semicolon && !self.match_token(Tokens::Semicolon) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+            }
+        }
+        if self.peek().is_none() || self.previous().unwrap().token_type == Tokens::EOF {
+            return Err(SyntaxError::EOFReached);
+        }
+        Ok(self.push_block(stmts))
     }
 
     fn decl_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
@@ -231,6 +251,9 @@ impl Parser {
     fn push_expr_stmt(&mut self, expression: Box<dyn Expr>) -> Box<dyn Stmt>
     { Box::new(ExprStmt { expression }) }
 
+    fn push_block(&mut self, stmts: Vec<Box<dyn Stmt>>) -> Box<dyn Stmt>
+    { Box::new(BlockStmt { stmts }) }
+
     fn push_print_stmt(&mut self, expression: Box<dyn Expr>) -> Box<dyn Stmt>
     { Box::new(Print { expression }) }
 
@@ -311,8 +334,9 @@ impl Parser {
                 self.sync(&mut e);
                 self.errs.push(e);
             } else if let Ok(stmt) = stmt_res {
+                let needs_semicolon = stmt.needs_semicolon();
                 self.stmts.push(stmt);
-                if !self.consume(Tokens::Semicolon) {
+                if  needs_semicolon && !self.consume(Tokens::Semicolon) {
                     let mut err = SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new());
                     self.sync(&mut err);
                     self.errs.push(err);

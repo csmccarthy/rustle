@@ -2,18 +2,21 @@ use crate::scanner::{ Token, Literal as LiteralValue };
 use std::fmt::Display;
 use crate::evaluator::{ ASTEvaluator, RuntimeValue };
 
-pub trait ExprVisitor<'declarator, 'parser, R> {
-	fn visit_binary(&'declarator mut self, expr: &'parser Binary) -> R;
-	fn visit_grouping(&'declarator mut self, expr: &'parser Grouping) -> R;
-	fn visit_literal(&'declarator mut self, expr: &'parser Literal) -> R;
-	fn visit_unary(&'declarator mut self, expr: &'parser Unary) -> R;
-	fn visit_ternary(&'declarator mut self, expr: &'parser Ternary) -> R;
-	fn visit_assign(&'declarator mut self, expr: &'parser Assign) -> R;
-	fn visit_variable(&'declarator mut self, expr: &'parser Variable) -> R;
+pub trait ExprVisitor<'parser, R> {
+	fn visit_binary<'evaluator>(&'evaluator mut self, expr: &'parser Binary) -> R;
+	fn visit_grouping<'evaluator>(&'evaluator mut self, expr: &'parser Grouping) -> R;
+	fn visit_literal<'evaluator>(&'evaluator mut self, expr: &'parser Literal) -> R;
+	fn visit_unary<'evaluator>(&'evaluator mut self, expr: &'parser Unary) -> R;
+	fn visit_ternary<'evaluator>(&'evaluator mut self, expr: &'parser Ternary) -> R;
+	fn visit_assign<'evaluator>(&'evaluator mut self, expr: &'parser Assign) -> R;
+	fn visit_variable<'evaluator>(&'evaluator mut self, expr: &'parser Variable) -> R;
 }
 
 pub trait Evaluable {
-	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue;
+	fn evaluate<'evaluator, 'declarator, 'parser>(
+		&'parser self,
+		visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>
+	) -> RuntimeValue;
 }
 
 pub trait AssignmentTarget {
@@ -36,7 +39,7 @@ impl AssignmentTarget for Binary {
 }
 
 impl Evaluable for Binary {
-	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_binary(self)
 	}
 }
@@ -59,7 +62,7 @@ impl AssignmentTarget for Grouping {
 }
 
 impl Evaluable for Grouping {
-	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_grouping(self)
 	}
 }
@@ -82,7 +85,7 @@ impl AssignmentTarget for Literal {
 }
 
 impl Evaluable for Literal {
-	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_literal(self)
 	}
 }
@@ -106,7 +109,7 @@ impl AssignmentTarget for Unary {
 }
 
 impl Evaluable for Unary {
-	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_unary(self)
 	}
 }
@@ -131,7 +134,7 @@ impl AssignmentTarget for Ternary {
 }
 
 impl Evaluable for Ternary {
-	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_ternary(self)
 	}
 }
@@ -155,7 +158,7 @@ impl AssignmentTarget for Assign {
 }
 
 impl Evaluable for Assign {
-	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_assign(self)
 	}
 }
@@ -178,7 +181,7 @@ impl AssignmentTarget for Variable {
 }
 
 impl Evaluable for Variable {
-	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_variable(self)
 	}
 }
