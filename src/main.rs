@@ -6,13 +6,17 @@ mod error_reporter;
 mod parser;
 mod exprs;
 mod evaluator;
+mod stmts;
+mod declarator;
 
 
-use scanner::Scanner;
+use scanner::{ Scanner };
 // use scanner::{ Token, Tokens, Literal as LiteralValue };
 use error_reporter::ErrorReporter;
-use evaluator::{ ASTEvaluator };
-use parser::{ Parser };
+// use evaluator::{ ASTEvaluator };
+use declarator::{ ASTDeclarator };
+use parser::{ Parser, SyntaxError };
+use stmts::{ Stmt };
 
 use std::fs::File;
 use std::path::Path;
@@ -29,21 +33,30 @@ fn run(line: String) { // Should use bytes instead of String
     // }
     let mut parser = Parser::new(scanner.tokens);
     parser.parse();
-    println!("Errors:");
-    for err in parser.errs {
-        eprintln!("{}", err);
-    }
-    println!("\nStatements:");
-    let eval = ASTEvaluator;
-    for expr in parser.exprs {
-        print!("{} →  ", expr);
-        if io::stdout().flush().is_err() { eprintln!("Issue flushing expression to stdout") };
-        let res = expr.evaluate(&eval);
-        match res {
-            Err(_e) => eprintln!("Runtime Error :("),
-            Ok(val) => println!("{}", val),
+    let errs_ref: &Vec<SyntaxError> = &parser.errs;
+    if errs_ref.len() > 0 {
+        println!("Errors:");
+        for err in errs_ref {
+            eprintln!("{}", err);
         }
     }
+    // println!("\nStatements:");
+    let stmts_ref: &Vec<Box<dyn Stmt>> = &parser.stmts;
+    {
+        let mut decl = ASTDeclarator::new();
+        for stmt in stmts_ref {
+            // print!("{} →  ", stmt);
+            if io::stdout().flush().is_err() { eprintln!("Issue flushing statement to stdout") };
+            let stmt: &Box<dyn Stmt> = stmt;
+            let res = stmt.execute(&mut decl);
+            match res {
+                Err(e) => eprintln!("Runtime Error: {:?}", e),
+                // Ok(val) => println!("{}", "Run successfully"),
+                _ => ()
+            }
+        }
+    }
+    // parser;
 }
 
 

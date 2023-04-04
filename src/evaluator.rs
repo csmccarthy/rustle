@@ -1,23 +1,34 @@
 
 
 use crate::scanner::{ Tokens, Literal as LiteralValue };
-use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary };
+use crate::exprs::{ Expr, ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign };
+use std::collections::HashMap;
 
+#[derive(Debug)]
 pub enum RuntimeError {
 	InvalidBinaryOp(Tokens),
 	InvalidBinaryLiteral(LiteralValue),
 	InvalidConditional(LiteralValue),
 	InvalidUnaryOp(Tokens),
 	InvalidUnaryLiteral(LiteralValue),
+	UndefinedVariable(String),
 }
 
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
 pub type RuntimeValue = RuntimeResult<LiteralValue>;
 
-pub struct ASTEvaluator;
+pub struct ASTEvaluator<'declarator, 'parser> {
+    stack: &'declarator mut HashMap<String, &'parser Box<dyn Expr>>
+}
 
-impl ASTEvaluator {
-    fn num_operate<F, G, H>(&self, r: LiteralValue, result: G, op_cb: F) -> RuntimeValue
+impl<'declarator, 'parser> ASTEvaluator<'declarator, 'parser> {
+    pub fn new(map: &'declarator mut HashMap<String, &'parser Box<dyn Expr>>)
+    -> ASTEvaluator<'declarator, 'parser>
+    {
+        ASTEvaluator { stack: map }
+    }
+
+    fn num_operate<F, G, H>(&'declarator self, r: LiteralValue, result: G, op_cb: F) -> RuntimeValue
     where F: Fn(f64) -> H, G: Fn(H) -> LiteralValue
     {
         return match r {
@@ -45,8 +56,8 @@ impl ASTEvaluator {
     }
 }
 
-impl ExprVisitor<RuntimeValue> for ASTEvaluator {
-	fn visit_binary(&self, expr: &Binary) -> RuntimeValue {
+impl<'declarator, 'parser> ExprVisitor<'declarator, 'parser, RuntimeValue> for ASTEvaluator<'declarator, 'parser> {
+	fn visit_binary(&'declarator mut self, expr: &'parser Binary) -> RuntimeValue {
 		let left = expr.left.evaluate(self)?;
 		let right = expr.right.evaluate(self)?;
 
@@ -113,15 +124,15 @@ impl ExprVisitor<RuntimeValue> for ASTEvaluator {
 		}
 	}
 
-	fn visit_grouping(&self, expr: &Grouping) -> RuntimeValue {
+	fn visit_grouping(&'declarator mut self, expr: &'parser Grouping) -> RuntimeValue {
 		expr.expression.evaluate(self)
 	}
 
-	fn visit_literal(&self, expr: &Literal) -> RuntimeValue {
+	fn visit_literal(&'declarator mut self, expr: &'parser Literal) -> RuntimeValue {
 		Ok(expr.value.clone())
 	}
 
-	fn visit_unary(&self, expr: &Unary) -> RuntimeValue {
+	fn visit_unary(&'declarator mut self, expr: &'parser Unary) -> RuntimeValue {
 		let right = expr.right.evaluate(self)?;
 
 		match right {
@@ -141,13 +152,27 @@ impl ExprVisitor<RuntimeValue> for ASTEvaluator {
 		}
 	}
 
-	fn visit_ternary(&self, expr: &Ternary) -> RuntimeValue {
+	fn visit_ternary(&mut self, expr: &'parser Ternary) -> RuntimeValue {
 		let test = expr.condition.evaluate(self)?;
 
+        // self.clone();
 		match test {
 			LiteralValue::Bool(true) => return Ok(expr.expr_if.evaluate(self)?),
 			LiteralValue::Bool(false) => return Ok(expr.expr_else.evaluate(self)?),
 			_ => return Err(RuntimeError::InvalidConditional(test.clone()))
 		}
+	}
+
+	fn visit_variable(&'declarator mut self, expr: &Variable) -> RuntimeValue {
+		let stack_opt = self.stack.get(&expr.identifier.lexeme.clone());
+        if let None = stack_opt {
+            return Err(RuntimeError::UndefinedVariable(expr.identifier.lexeme.clone()));
+        }
+        Ok(stack_opt.unwrap().evaluate(self)?)
+	}
+
+	fn visit_assign(&mut self, expr: &'parser Assign) -> RuntimeValue {
+		self.stack.insert(expr.identifier.lexeme.clone(), &expr.expression);
+        Ok(LiteralValue::Nil)
 	}
 }

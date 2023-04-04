@@ -1,5 +1,13 @@
-1 * -2 <= 1 + 6 == / 3 + 0 * -4;
+//1 * -2 <= 1 + 6 == / 3 + 0 * -4;
+//1 + 1;
+//3 + 4; // Comment here
+//4 * 5, 1 * 2;
+//1 < 2 ? 1 : "b" == "c" ? 2 : 3;
+print 1 * -2 + 7 * 1000;
+print "COOL";
+print "LANGUAGE";
+print true;
+print 1 == 2;
+var test = "held variable";
+print test;
 1 + 1;
-3 + 4; // Comment here
-4 * 5, 1 * 2;
-1 < 2 ? 1 : "b" == "c" ? 2 : 3;

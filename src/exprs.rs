@@ -2,19 +2,25 @@ use crate::scanner::{ Token, Literal as LiteralValue };
 use std::fmt::Display;
 use crate::evaluator::{ ASTEvaluator, RuntimeValue };
 
-pub trait ExprVisitor<R> {
-	fn visit_binary(&self, expr: &Binary) -> R;
-	fn visit_grouping(&self, expr: &Grouping) -> R;
-	fn visit_literal(&self, expr: &Literal) -> R;
-	fn visit_unary(&self, expr: &Unary) -> R;
-	fn visit_ternary(&self, expr: &Ternary) -> R;
+pub trait ExprVisitor<'declarator, 'parser, R> {
+	fn visit_binary(&'declarator mut self, expr: &'parser Binary) -> R;
+	fn visit_grouping(&'declarator mut self, expr: &'parser Grouping) -> R;
+	fn visit_literal(&'declarator mut self, expr: &'parser Literal) -> R;
+	fn visit_unary(&'declarator mut self, expr: &'parser Unary) -> R;
+	fn visit_ternary(&'declarator mut self, expr: &'parser Ternary) -> R;
+	fn visit_assign(&'declarator mut self, expr: &'parser Assign) -> R;
+	fn visit_variable(&'declarator mut self, expr: &'parser Variable) -> R;
 }
 
 pub trait Evaluable {
-	fn evaluate(&self, visitor: &ASTEvaluator) -> RuntimeValue;
+	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue;
 }
 
-pub trait Expr: Display+Evaluable {}
+pub trait AssignmentTarget {
+	fn assignment_target(&self) -> Option<Token>;
+}
+
+pub trait Expr: Display+Evaluable+AssignmentTarget {}
 
 
 pub struct Binary {
@@ -25,8 +31,12 @@ pub struct Binary {
 
 impl Expr for Binary {}
 
+impl AssignmentTarget for Binary {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
 impl Evaluable for Binary {
-	fn evaluate(&self, visitor: &ASTEvaluator) -> RuntimeValue {
+	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
 		visitor.visit_binary(self)
 	}
 }
@@ -44,8 +54,12 @@ pub struct Grouping {
 
 impl Expr for Grouping {}
 
+impl AssignmentTarget for Grouping {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
 impl Evaluable for Grouping {
-	fn evaluate(&self, visitor: &ASTEvaluator) -> RuntimeValue {
+	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
 		visitor.visit_grouping(self)
 	}
 }
@@ -63,8 +77,12 @@ pub struct Literal {
 
 impl Expr for Literal {}
 
+impl AssignmentTarget for Literal {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
 impl Evaluable for Literal {
-	fn evaluate(&self, visitor: &ASTEvaluator) -> RuntimeValue {
+	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
 		visitor.visit_literal(self)
 	}
 }
@@ -83,8 +101,12 @@ pub struct Unary {
 
 impl Expr for Unary {}
 
+impl AssignmentTarget for Unary {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
 impl Evaluable for Unary {
-	fn evaluate(&self, visitor: &ASTEvaluator) -> RuntimeValue {
+	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
 		visitor.visit_unary(self)
 	}
 }
@@ -104,8 +126,12 @@ pub struct Ternary {
 
 impl Expr for Ternary {}
 
+impl AssignmentTarget for Ternary {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
 impl Evaluable for Ternary {
-	fn evaluate(&self, visitor: &ASTEvaluator) -> RuntimeValue {
+	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
 		visitor.visit_ternary(self)
 	}
 }
@@ -113,5 +139,52 @@ impl Evaluable for Ternary {
 impl Display for Ternary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} ? {} : {})", self.condition, self.expr_if, self.expr_else)
+    }
+}
+
+
+pub struct Assign {
+	pub identifier: Token,
+	pub expression: Box<dyn Expr>,
+}
+
+impl Expr for Assign {}
+
+impl AssignmentTarget for Assign {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
+impl Evaluable for Assign {
+	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+		visitor.visit_assign(self)
+	}
+}
+
+impl Display for Assign {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "({} = {})", self.identifier.lexeme, self.expression)
+    }
+}
+
+
+pub struct Variable {
+	pub identifier: Token,
+}
+
+impl Expr for Variable {}
+
+impl AssignmentTarget for Variable {
+	fn assignment_target(&self) -> Option<Token> { Some(self.identifier.clone()) }
+}
+
+impl Evaluable for Variable {
+	fn evaluate<'evaluator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'evaluator, 'parser>) -> RuntimeValue {
+		visitor.visit_variable(self)
+	}
+}
+
+impl Display for Variable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "var {}", self.identifier.lexeme)
     }
 }

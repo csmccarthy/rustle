@@ -1,20 +1,21 @@
 use std::fmt::Display;
 
-use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary };
+use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign };
+use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt };
 use crate::scanner::{ Token, Tokens, Literal as LiteralValue };
 
 pub struct Parser {
     pub tokens: Vec<Token>,
     current: u8,
-    pub exprs: Vec<Box<dyn Expr>>,
+    pub stmts: Vec<Box<dyn Stmt>>,
     pub errs: Vec<SyntaxError>,
 }
 
 pub enum SyntaxError {
     UnexpectedToken(Token, Vec<Token>),
     ExpectedLiteral(u16, Vec<Token>),
+    NotLValue(Box<dyn Expr>),
     EOFReached,
-    EmptyFile,
 }
 
 impl Display for SyntaxError {
@@ -41,8 +42,8 @@ impl Display for SyntaxError {
             SyntaxError::EOFReached => {
                 return write!(f, "Reached end of file while parsing expression")
             },
-            SyntaxError::EmptyFile => {
-                return write!(f, "Empty file")
+            SyntaxError::NotLValue(expr) => {
+                return write!(f, "Invalid expression given for L Value: {}", expr)
             },
         }
     }
@@ -62,7 +63,7 @@ const UNARY_TOKENS: [ Tokens ; 2 ] = [Tokens::Not, Tokens::Minus];
 impl Parser {
 
     pub fn new(tokens: Vec<Token>) -> Parser {
-        Parser { tokens, current: 0, exprs: Vec::new(), errs: Vec::new() }
+        Parser { tokens, current: 0, stmts: Vec::new(), errs: Vec::new() }
     }
 
     fn match_token_fxn<F>(&mut self, test_fxn: F) -> bool
@@ -88,12 +89,60 @@ impl Parser {
         self.match_token_fxn(|token| vec.contains(token))
     }
 
+    fn declaration(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        if self.match_token(Tokens::Var) { return Ok(self.decl_stmt()?) }
+        self.stmt()
+    }
+
+    fn stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        if self.match_token(Tokens::Print) { return Ok(self.print_stmt()?) }
+        self.expression_stmt()
+    }
+
+    fn decl_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let name = match self.advance() {
+            None => return Err(SyntaxError::EOFReached),
+            Some(tk) if tk.token_type == Tokens::Identifier => {
+                tk.lexeme.clone()
+            }
+            Some(_) => return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        };
+        if self.consume(Tokens::Assign) {
+            let expr = self.expression()?;
+            return Ok(self.push_var_stmt(name, expr));
+        }
+        let expr = self.push_literal(LiteralValue::Nil);
+        Ok(self.push_var_stmt(name, expr))
+    }
+
+    fn expression_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let expr = self.expression()?;
+        Ok(self.push_expr_stmt(expr))
+    }
+
+    fn print_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let expr = self.expression()?;
+        Ok(self.push_print_stmt(expr))
+    }
+
     fn expression(&mut self) -> ParseResult<Box<dyn Expr>> {
         self.expression_group()
     }
 
     fn expression_group(&mut self) -> ParseResult<Box<dyn Expr>> {
-        self.parse_binary(|s| { s.ternary() }, Vec::from(EXPRESSION_GROUP_TOKENS))
+        self.parse_binary(|s| { s.assignment() }, Vec::from(EXPRESSION_GROUP_TOKENS))
+    }
+
+    fn assignment(&mut self) -> ParseResult<Box<dyn Expr>> {
+        let expr = self.ternary()?;
+        if self.match_token(Tokens::Assign) {
+            let val = self.assignment()?;
+            match expr.assignment_target() {
+                Some(i) => return Ok(self.push_assignment(i, val)),
+                None => return Err(SyntaxError::NotLValue(expr))
+            }
+        }
+        Ok(expr)
     }
 
     fn ternary(&mut self) -> ParseResult<Box<dyn Expr>> {
@@ -167,11 +216,23 @@ impl Parser {
             }
             return Ok(self.push_grouping(expr));
         }
+        else if self.match_token(Tokens::Identifier) {
+            return Ok(self.push_variable(self.previous().unwrap().clone()));
+        }
         else if self.match_token(Tokens::EOF) {
             return Err(SyntaxError::EOFReached);
         }
         Err(SyntaxError::ExpectedLiteral(self.peek().unwrap().line, Vec::new()))
     }
+
+    fn push_var_stmt(&mut self, name: String, expression: Box<dyn Expr>) -> Box<dyn Stmt>
+    { Box::new(VarStmt { name, expression }) }
+
+    fn push_expr_stmt(&mut self, expression: Box<dyn Expr>) -> Box<dyn Stmt>
+    { Box::new(ExprStmt { expression }) }
+
+    fn push_print_stmt(&mut self, expression: Box<dyn Expr>) -> Box<dyn Stmt>
+    { Box::new(Print { expression }) }
 
     fn push_literal(&mut self, literal: LiteralValue) -> Box<dyn Expr>
     { Box::new(Literal { value: literal }) }
@@ -187,6 +248,12 @@ impl Parser {
 
     fn push_grouping(&mut self, expression: Box<dyn Expr>) -> Box<dyn Expr>
     { Box::new(Grouping { expression }) }
+
+    fn push_assignment(&mut self, identifier: Token, expression: Box<dyn Expr>) -> Box<dyn Expr>
+    { Box::new(Assign { identifier, expression }) }
+
+    fn push_variable(&mut self, identifier: Token) -> Box<dyn Expr>
+    { Box::new(Variable { identifier }) }
 
     fn previous(&self) -> Option<&Token> {
         let cur_idx: usize = (self.current - 1).into();
@@ -237,14 +304,14 @@ impl Parser {
     }
 
     pub fn parse(&mut self) {
-        if let None = self.peek() { self.errs.push(SyntaxError::EmptyFile); }
+        // if let None = self.peek() { self.errs.push(SyntaxError::EmptyFile); }
         while self.peek().is_some() && self.peek().unwrap().token_type != Tokens::EOF {
-            let expr_res = self.expression();
-            if let Err(mut e) = expr_res {
+            let stmt_res = self.declaration();
+            if let Err(mut e) = stmt_res {
                 self.sync(&mut e);
                 self.errs.push(e);
-            } else if let Ok(expr) = expr_res {
-                self.exprs.push(expr);
+            } else if let Ok(stmt) = stmt_res {
+                self.stmts.push(stmt);
                 if !self.consume(Tokens::Semicolon) {
                     let mut err = SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new());
                     self.sync(&mut err);
