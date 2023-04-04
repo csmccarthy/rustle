@@ -9,6 +9,9 @@ pub trait StmtVisitor<'parser, R> {
 	fn visit_print(&mut self, expr: &'parser Print) -> R;
 	fn visit_var(&mut self, expr: &'parser VarStmt) -> R;
 	fn visit_block(&mut self, expr: &'parser BlockStmt) -> R;
+	fn visit_if(&mut self, expr: &'parser IfStmt) -> R;
+	fn visit_while(&mut self, expr: &'parser WhileLoop) -> R;
+	fn visit_for(&mut self, expr: &'parser ForLoop) -> R;
 }
 
 pub trait Executable {
@@ -89,3 +92,61 @@ impl Executable for BlockStmt {
 impl NeedsSemicolon for BlockStmt {
 	fn needs_semicolon(&self) -> bool { false }
 }
+
+
+pub struct IfStmt {
+    pub condition: Box<dyn Expr>,
+    pub stmt_if: Box<dyn Stmt>,
+    pub stmt_else: Option<Box<dyn Stmt>>,
+}
+
+impl Stmt for IfStmt {}
+
+impl Executable for IfStmt {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_if(self)
+	}
+}
+
+impl NeedsSemicolon for IfStmt {
+	fn needs_semicolon(&self) -> bool { false }
+}
+
+
+pub struct WhileLoop {
+    pub condition: Box<dyn Expr>,
+    pub block: Box<dyn Stmt>,
+}
+
+impl Stmt for WhileLoop {}
+
+impl Executable for WhileLoop {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_while(self)
+	}
+}
+
+impl NeedsSemicolon for WhileLoop {
+	fn needs_semicolon(&self) -> bool { false }
+}
+
+
+pub struct ForLoop {
+    pub init: Box<dyn Stmt>,
+    pub condition: Box<dyn Expr>,
+    pub incrementor: Box<dyn Expr>,
+    pub block: Box<dyn Stmt>,
+}
+
+impl Stmt for ForLoop {}
+
+impl Executable for ForLoop {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_for(self)
+	}
+}
+
+impl NeedsSemicolon for ForLoop {
+	fn needs_semicolon(&self) -> bool { false }
+}
+

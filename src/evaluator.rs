@@ -1,7 +1,7 @@
 
 
 use crate::scanner::{ Tokens, Literal as LiteralValue };
-use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign };
+use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr };
 // use std::collections::HashMap;
 use crate::environment::{ Environment };
 
@@ -18,13 +18,13 @@ pub enum RuntimeError {
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
 pub type RuntimeValue = RuntimeResult<LiteralValue>;
 
-pub struct ASTEvaluator<'declarator, 'parser> {
-    stack: &'declarator mut Environment<'parser>
+pub struct ASTEvaluator<'declarator> {
+    stack: &'declarator mut Environment
 }
 
-impl<'declarator, 'parser> ASTEvaluator<'declarator, 'parser> {
-    pub fn new(map: &'declarator mut Environment<'parser>)
-    -> ASTEvaluator<'declarator, 'parser>
+impl<'declarator> ASTEvaluator<'declarator> {
+    pub fn new(map: &'declarator mut Environment)
+    -> ASTEvaluator<'declarator>
     {
         ASTEvaluator { stack: map }
     }
@@ -57,7 +57,7 @@ impl<'declarator, 'parser> ASTEvaluator<'declarator, 'parser> {
     }
 }
 
-impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'declarator, 'parser> {
+impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'declarator> {
 	fn visit_binary<'evaluator>(&'evaluator mut self, expr: &'parser Binary) -> RuntimeValue {
 		let left = expr.left.evaluate(self)?;
 		let right = expr.right.evaluate(self)?;
@@ -164,11 +164,42 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
 
 	fn visit_variable<'evaluator>(&'evaluator mut self, expr: &Variable) -> RuntimeValue {
 		let expr = self.stack.get(&expr.identifier.lexeme)?;
-        Ok(expr.evaluate(self)?)
+        Ok(expr)
 	}
 
 	fn visit_assign(&mut self, expr: &'parser Assign) -> RuntimeValue {
-		self.stack.assign(&expr.identifier.lexeme, &expr.expression)?;
+        let val = expr.expression.evaluate(self)?;
+		self.stack.assign(&expr.identifier.lexeme, val)?;
         Ok(LiteralValue::Nil)
+	}
+
+	fn visit_or(&mut self, expr: &'parser OrExpr) -> RuntimeValue {
+        let val = expr.left.evaluate(self)?;
+        return match val {
+            LiteralValue::Bool(true) => Ok(LiteralValue::Bool(true)),
+            LiteralValue::Bool(false) => {
+                let rval = expr.right.evaluate(self)?;
+                return match rval {
+                    LiteralValue::Bool(b) => Ok(LiteralValue::Bool(b)),
+                    _ => Err(RuntimeError::InvalidConditional(rval.clone()))
+                };
+            }
+            _ => return Err(RuntimeError::InvalidConditional(val.clone()))
+        }
+	}
+
+	fn visit_and(&mut self, expr: &'parser AndExpr) -> RuntimeValue {
+        let val = expr.left.evaluate(self)?;
+        return match val {
+            LiteralValue::Bool(false) => Ok(LiteralValue::Bool(false)),
+            LiteralValue::Bool(true) => {
+                let rval = expr.right.evaluate(self)?;
+                return match rval {
+                    LiteralValue::Bool(b) => Ok(LiteralValue::Bool(b)),
+                    _ => Err(RuntimeError::InvalidConditional(rval.clone()))
+                };
+            }
+            _ => return Err(RuntimeError::InvalidConditional(val.clone()))
+        }
 	}
 }

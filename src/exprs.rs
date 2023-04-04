@@ -10,12 +10,14 @@ pub trait ExprVisitor<'parser, R> {
 	fn visit_ternary<'evaluator>(&'evaluator mut self, expr: &'parser Ternary) -> R;
 	fn visit_assign<'evaluator>(&'evaluator mut self, expr: &'parser Assign) -> R;
 	fn visit_variable<'evaluator>(&'evaluator mut self, expr: &'parser Variable) -> R;
+	fn visit_or<'evaluator>(&'evaluator mut self, expr: &'parser OrExpr) -> R;
+	fn visit_and<'evaluator>(&'evaluator mut self, expr: &'parser AndExpr) -> R;
 }
 
 pub trait Evaluable {
 	fn evaluate<'evaluator, 'declarator, 'parser>(
 		&'parser self,
-		visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>
+		visitor: &'evaluator mut ASTEvaluator<'declarator>
 	) -> RuntimeValue;
 }
 
@@ -39,7 +41,7 @@ impl AssignmentTarget for Binary {
 }
 
 impl Evaluable for Binary {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
 		visitor.visit_binary(self)
 	}
 }
@@ -62,7 +64,7 @@ impl AssignmentTarget for Grouping {
 }
 
 impl Evaluable for Grouping {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
 		visitor.visit_grouping(self)
 	}
 }
@@ -85,7 +87,7 @@ impl AssignmentTarget for Literal {
 }
 
 impl Evaluable for Literal {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
 		visitor.visit_literal(self)
 	}
 }
@@ -109,7 +111,7 @@ impl AssignmentTarget for Unary {
 }
 
 impl Evaluable for Unary {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
 		visitor.visit_unary(self)
 	}
 }
@@ -134,7 +136,7 @@ impl AssignmentTarget for Ternary {
 }
 
 impl Evaluable for Ternary {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
 		visitor.visit_ternary(self)
 	}
 }
@@ -158,7 +160,7 @@ impl AssignmentTarget for Assign {
 }
 
 impl Evaluable for Assign {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
 		visitor.visit_assign(self)
 	}
 }
@@ -181,7 +183,7 @@ impl AssignmentTarget for Variable {
 }
 
 impl Evaluable for Variable {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
 		visitor.visit_variable(self)
 	}
 }
@@ -189,5 +191,53 @@ impl Evaluable for Variable {
 impl Display for Variable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "var {}", self.identifier.lexeme)
+    }
+}
+
+
+pub struct OrExpr { // TODO: probably merge with or
+	pub left: Box<dyn Expr>,
+	pub right: Box<dyn Expr>,
+}
+
+impl Expr for OrExpr {}
+
+impl AssignmentTarget for OrExpr {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
+impl Evaluable for OrExpr {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+		visitor.visit_or(self)
+	}
+}
+
+impl Display for OrExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "({} {})", self.left, self.right)
+    }
+}
+
+
+pub struct AndExpr {
+	pub left: Box<dyn Expr>,
+	pub right: Box<dyn Expr>,
+}
+
+impl Expr for AndExpr {}
+
+impl AssignmentTarget for AndExpr {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
+impl Evaluable for AndExpr {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+		visitor.visit_and(self)
+	}
+}
+
+impl Display for AndExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "({} {})", self.left, self.right)
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign };
-use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt };
+use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr };
+use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop };
 use crate::scanner::{ Token, Tokens, Literal as LiteralValue };
 
 pub struct Parser {
@@ -97,7 +97,54 @@ impl Parser {
     fn stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
         if self.match_token(Tokens::Print) { return Ok(self.print_stmt()?) }
         else if self.match_token(Tokens::LeftBrace) { return Ok(self.block()?) }
+        else if self.match_token(Tokens::If) { return Ok(self.if_stmt()?) }
+        else if self.match_token(Tokens::While) { return Ok(self.while_loop()?) }
+        else if self.match_token(Tokens::For) { return Ok(self.for_loop()?) }
         self.expression_stmt()
+    }
+
+    fn while_loop(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let condition = self.expression()?;
+        if !self.match_token(Tokens::LeftBrace) {
+            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        }
+        let block = self.block()?;
+        Ok(self.push_while_loop(condition, block))
+    }
+
+    fn for_loop(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let init: Box<dyn Stmt>;
+        if self.match_token(Tokens::Var) { init = self.decl_stmt()? }
+        else { init = self.expression_stmt()? }
+        if !self.match_token(Tokens::Semicolon) {
+            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        }
+        let condition = self.expression()?;
+        if !self.match_token(Tokens::Semicolon) {
+            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        }
+        let incrementor = self.expression()?;
+        if !self.match_token(Tokens::LeftBrace) {
+            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        }
+        let block = self.block()?;
+        Ok(self.push_for_loop(init, condition, incrementor, block))
+    }
+
+    fn if_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let condition = self.expression()?;
+        if !self.match_token(Tokens::LeftBrace) {
+            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        }
+        let stmt_if = self.block()?;
+        let mut stmt_else: Option<Box<dyn Stmt>> = None;
+        if self.match_token(Tokens::Else) {
+            if !self.match_token(Tokens::LeftBrace) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+            }
+            stmt_else = Some(self.block()?);
+        }
+        Ok(self.push_if_stmt(condition, stmt_if, stmt_else))
     }
 
     fn block(&mut self) -> ParseResult<Box<dyn Stmt>> {
@@ -166,14 +213,32 @@ impl Parser {
     }
 
     fn ternary(&mut self) -> ParseResult<Box<dyn Expr>> {
-        let mut expr = self.equality()?;
+        let mut expr = self.logic_or()?;
         while self.match_token(Tokens::Question) {
-            let expr_if = self.equality()?;
+            let expr_if = self.logic_or()?;
             if !self.consume(Tokens::Colon) {
                 return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()));
             }
             let carried_else = self.ternary()?;
             expr = self.push_ternary(expr, expr_if, carried_else);
+        }
+        Ok(expr)
+    }
+
+    fn logic_or(&mut self) -> ParseResult<Box<dyn Expr>> {
+        let mut expr = self.logic_and()?;
+        while self.match_token(Tokens::Or) {
+            let right = self.logic_and()?;
+            expr = self.push_or(expr, right);
+        }
+        Ok(expr)
+    }
+
+    fn logic_and(&mut self) -> ParseResult<Box<dyn Expr>> {
+        let mut expr = self.equality()?;
+        while self.match_token(Tokens::And) {
+            let right = self.equality()?;
+            expr = self.push_and(expr, right);
         }
         Ok(expr)
     }
@@ -248,6 +313,17 @@ impl Parser {
     fn push_var_stmt(&mut self, name: String, expression: Box<dyn Expr>) -> Box<dyn Stmt>
     { Box::new(VarStmt { name, expression }) }
 
+    fn push_while_loop(&mut self, condition: Box<dyn Expr>, block: Box<dyn Stmt>) -> Box<dyn Stmt>
+    { Box::new(WhileLoop { condition, block }) }
+
+    fn push_for_loop(
+        &mut self, init: Box<dyn Stmt>, condition: Box<dyn Expr>, incrementor: Box<dyn Expr>, block: Box<dyn Stmt>
+    ) -> Box<dyn Stmt>
+    { Box::new(ForLoop { init, condition, incrementor, block }) }
+
+    fn push_if_stmt(&mut self, condition: Box<dyn Expr>, stmt_if: Box<dyn Stmt>, stmt_else: Option<Box<dyn Stmt>>) -> Box<dyn Stmt>
+    { Box::new(IfStmt { condition, stmt_if, stmt_else }) }
+
     fn push_expr_stmt(&mut self, expression: Box<dyn Expr>) -> Box<dyn Stmt>
     { Box::new(ExprStmt { expression }) }
 
@@ -277,6 +353,12 @@ impl Parser {
 
     fn push_variable(&mut self, identifier: Token) -> Box<dyn Expr>
     { Box::new(Variable { identifier }) }
+
+    fn push_or(&mut self, left: Box<dyn Expr>, right: Box<dyn Expr>) -> Box<dyn Expr>
+    { Box::new(OrExpr { left, right }) }
+
+    fn push_and(&mut self, left: Box<dyn Expr>, right: Box<dyn Expr>) -> Box<dyn Expr>
+    { Box::new(AndExpr { left, right }) }
 
     fn previous(&self) -> Option<&Token> {
         let cur_idx: usize = (self.current - 1).into();
