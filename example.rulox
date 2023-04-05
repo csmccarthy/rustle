@@ -1,9 +1,7 @@
 fun test() {
-    print "hi";
     fun test2() {
         print "inner";
     }
-    test2();
     return test2;
 }
 var a = test();

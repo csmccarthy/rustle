@@ -14,7 +14,7 @@ pub enum RuntimeError {
 	InvalidUnaryLiteral(LiteralValue),
 	UndefinedVariable(String),
 	UndefinedFunction(String),
-	// InvalidCallable(LiteralValue),
+	InvalidCallable(LiteralValue),
 	MismatchedArguments(usize, usize),
 	Return(LiteralValue),
 }

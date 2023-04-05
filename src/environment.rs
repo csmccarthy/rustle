@@ -81,16 +81,25 @@ impl<'parser> Environment<'parser> {
 
     pub fn store_fxn(&mut self, fxn: &'parser FunStmt) {
         self.functions.insert(fxn.name.lexeme.clone(), fxn);
+        self.current_scope_mut().insert(fxn.name.lexeme.clone(), Literal::Func(fxn.name.lexeme.clone()));
     }
 
-    pub fn get_fxn(&self, name: &str) -> Option<&&FunStmt> {
-        self.functions.get(name)
+    pub fn get_fxn(&self, name: &str) -> Option<&Literal> {
+        self.current_scope().get(name)
     }
 
-    pub fn call_fxn(&self, name: &str, args: &Vec<Literal>) -> RuntimeValue {
-        let fxn_opt = self.get_fxn(name);
+    pub fn call_fxn(&mut self, name: &str, args: &Vec<Literal>) -> RuntimeValue {
+        let literal_opt = self.get_fxn(name);
+        let fxn_literal = match literal_opt {
+            None => { println!("here"); return Err(RuntimeError::UndefinedFunction(name.to_owned())) },
+            Some(f) => f
+        };
+        let fxn_opt = match fxn_literal {
+            Literal::Func(name) => self.functions.get(name),
+            _ => return Err(RuntimeError::InvalidCallable(fxn_literal.clone()))
+        };
         let fxn = match fxn_opt {
-            None => return Err(RuntimeError::UndefinedFunction(name.to_owned())),
+            None => { println!("no, here"); return Err(RuntimeError::UndefinedFunction(name.to_owned())) },
             Some(f) => f
         };
         if fxn.params.len() != args.len() {
@@ -101,9 +110,23 @@ impl<'parser> Environment<'parser> {
             fxn_env.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
         }
         let mut decl = ASTDeclarator::new(&mut fxn_env);
-        match fxn.block.execute(&mut decl) {
+        let res = fxn.block.execute(&mut decl);
+        drop(decl);
+        match res {
             Ok(_) => Ok(Literal::Nil),
-            Err(RuntimeError::Return(literal)) => Ok(literal),
+            Err(RuntimeError::Return(literal)) => {
+                // let mut env = fxn_env.get_closure();
+                // if let Literal::Func(name) = &literal {
+                //     let lambda = fxn_env.functions.get(name).unwrap();
+                //     self.store_fxn(lambda);
+                // }
+                // match literal {
+                //     Literal::Func(name) => {
+                //     }
+                //     _ => return Ok(literal)
+                // }
+                Ok(literal)
+            },
             Err(e) => Err(e),
         }
         

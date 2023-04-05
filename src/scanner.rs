@@ -74,6 +74,7 @@ pub enum Literal {
     Num(f64),
     Str(String),
     Bool(bool),
+    Func(String),
     Nil,
 }
 
@@ -83,6 +84,7 @@ impl Display for Literal {
             Literal::Num(num) => write!(f, "{}", num),
             Literal::Str(str) => write!(f, "{}", str),
             Literal::Bool(bool) => write!(f, "{}", bool),
+            Literal::Func(str) => write!(f, "fn {}()", &str),
             Literal::Nil => write!(f, "()"),
         }
     }
