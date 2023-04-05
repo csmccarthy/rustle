@@ -12,12 +12,13 @@ pub trait ExprVisitor<'parser, R> {
 	fn visit_variable<'evaluator>(&'evaluator mut self, expr: &'parser Variable) -> R;
 	fn visit_or<'evaluator>(&'evaluator mut self, expr: &'parser OrExpr) -> R;
 	fn visit_and<'evaluator>(&'evaluator mut self, expr: &'parser AndExpr) -> R;
+	fn visit_call<'evaluator>(&'evaluator mut self, expr: &'parser Call) -> R;
 }
 
 pub trait Evaluable {
 	fn evaluate<'evaluator, 'declarator, 'parser>(
 		&'parser self,
-		visitor: &'evaluator mut ASTEvaluator<'declarator>
+		visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>
 	) -> RuntimeValue;
 }
 
@@ -25,7 +26,13 @@ pub trait AssignmentTarget {
 	fn assignment_target(&self) -> Option<Token>;
 }
 
-pub trait Expr: Display+Evaluable+AssignmentTarget {}
+pub trait Callable {
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>;
+}
+
+pub trait Expr: Display+Evaluable+AssignmentTarget+Callable {}
 
 
 pub struct Binary {
@@ -41,7 +48,7 @@ impl AssignmentTarget for Binary {
 }
 
 impl Evaluable for Binary {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_binary(self)
 	}
 }
@@ -49,6 +56,16 @@ impl Evaluable for Binary {
 impl Display for Binary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} {} {})", self.left, self.operator.lexeme, self.right)
+    }
+}
+
+impl Callable for Binary {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
     }
 }
 
@@ -64,7 +81,7 @@ impl AssignmentTarget for Grouping {
 }
 
 impl Evaluable for Grouping {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_grouping(self)
 	}
 }
@@ -72,6 +89,16 @@ impl Evaluable for Grouping {
 impl Display for Grouping {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({})", self.expression)
+    }
+}
+
+impl Callable for Grouping {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
     }
 }
 
@@ -87,7 +114,7 @@ impl AssignmentTarget for Literal {
 }
 
 impl Evaluable for Literal {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_literal(self)
 	}
 }
@@ -95,6 +122,16 @@ impl Evaluable for Literal {
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.value)
+    }
+}
+
+impl Callable for Literal {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
     }
 }
 
@@ -111,7 +148,7 @@ impl AssignmentTarget for Unary {
 }
 
 impl Evaluable for Unary {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_unary(self)
 	}
 }
@@ -119,6 +156,16 @@ impl Evaluable for Unary {
 impl Display for Unary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} {})", self.operator.lexeme, self.right)
+    }
+}
+
+impl Callable for Unary {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
     }
 }
 
@@ -136,7 +183,7 @@ impl AssignmentTarget for Ternary {
 }
 
 impl Evaluable for Ternary {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_ternary(self)
 	}
 }
@@ -144,6 +191,16 @@ impl Evaluable for Ternary {
 impl Display for Ternary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} ? {} : {})", self.condition, self.expr_if, self.expr_else)
+    }
+}
+
+impl Callable for Ternary {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
     }
 }
 
@@ -160,7 +217,7 @@ impl AssignmentTarget for Assign {
 }
 
 impl Evaluable for Assign {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_assign(self)
 	}
 }
@@ -168,6 +225,16 @@ impl Evaluable for Assign {
 impl Display for Assign {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} = {})", self.identifier.lexeme, self.expression)
+    }
+}
+
+impl Callable for Assign {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
     }
 }
 
@@ -183,7 +250,7 @@ impl AssignmentTarget for Variable {
 }
 
 impl Evaluable for Variable {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_variable(self)
 	}
 }
@@ -191,6 +258,16 @@ impl Evaluable for Variable {
 impl Display for Variable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "var {}", self.identifier.lexeme)
+    }
+}
+
+impl Callable for Variable {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
     }
 }
 
@@ -207,7 +284,7 @@ impl AssignmentTarget for OrExpr {
 }
 
 impl Evaluable for OrExpr {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_or(self)
 	}
 }
@@ -215,6 +292,16 @@ impl Evaluable for OrExpr {
 impl Display for OrExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} {})", self.left, self.right)
+    }
+}
+
+impl Callable for OrExpr {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
     }
 }
 
@@ -231,7 +318,7 @@ impl AssignmentTarget for AndExpr {
 }
 
 impl Evaluable for AndExpr {
-	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
 		visitor.visit_and(self)
 	}
 }
@@ -239,5 +326,64 @@ impl Evaluable for AndExpr {
 impl Display for AndExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} {})", self.left, self.right)
+    }
+}
+
+impl Callable for AndExpr {
+    
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		None
+    }
+}
+
+
+pub struct Call {
+	pub identifier: Token,
+	pub args: Vec<Box<dyn Expr>>,
+}
+
+impl Expr for Call {}
+
+impl AssignmentTarget for Call {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
+impl Evaluable for Call {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator, 'parser>) -> RuntimeValue {
+		visitor.visit_call(self)
+	}
+}
+
+impl Display for Call {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{} (", self.identifier)?;
+		for expr in &self.args {
+			write!(f, "{}", expr)?;
+		}
+		write!(f, ")")
+    }
+}
+
+impl Callable for Call {
+    fn callable(
+		&self,
+	) -> Option<Box<dyn Fn() -> RuntimeValue>>
+	{
+		// self.expression.eval
+		// self.identifier.lexeme
+		Some(Box::new(
+			|| {
+				println!("calling fxn");
+				// let mut literal_args = Vec::new();
+				// for arg in &self.args {
+				// 	literal_args.push(arg.evaluate(visitor)?);
+				// }
+				// let signature = self.expression.evaluate(visitor)?;
+				Ok(LiteralValue::Nil)
+			}
+		))
     }
 }

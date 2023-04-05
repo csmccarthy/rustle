@@ -3,6 +3,7 @@
 // use crate::evaluator::{ RuntimeValue };
 use crate::declarator::{ ASTDeclarator, RuntimeDeclaration };
 use crate::exprs::{ Expr };
+use crate::scanner::Token;
 
 pub trait StmtVisitor<'parser, R> {
 	fn visit_expr(&mut self, expr: &'parser ExprStmt) -> R;
@@ -12,6 +13,8 @@ pub trait StmtVisitor<'parser, R> {
 	fn visit_if(&mut self, expr: &'parser IfStmt) -> R;
 	fn visit_while(&mut self, expr: &'parser WhileLoop) -> R;
 	fn visit_for(&mut self, expr: &'parser ForLoop) -> R;
+	fn visit_fxn(&mut self, expr: &'parser FunStmt) -> R;
+	fn visit_return(&mut self, expr: &'parser ReturnStmt) -> R;
 }
 
 pub trait Executable {
@@ -148,5 +151,41 @@ impl Executable for ForLoop {
 
 impl NeedsSemicolon for ForLoop {
 	fn needs_semicolon(&self) -> bool { false }
+}
+
+
+pub struct FunStmt {
+    pub name: Token,
+    pub params: Vec<Token>,
+    pub block: Box<dyn Stmt>,
+}
+
+impl Stmt for FunStmt {}
+
+impl Executable for FunStmt {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_fxn(self)
+	}
+}
+
+impl NeedsSemicolon for FunStmt {
+	fn needs_semicolon(&self) -> bool { false }
+}
+
+
+pub struct ReturnStmt {
+    pub expression: Option<Box<dyn Expr>>,
+}
+
+impl Stmt for ReturnStmt {}
+
+impl Executable for ReturnStmt {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_return(self)
+	}
+}
+
+impl NeedsSemicolon for ReturnStmt {
+	fn needs_semicolon(&self) -> bool { true }
 }
 

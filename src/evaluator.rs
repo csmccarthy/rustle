@@ -1,7 +1,7 @@
 
 
 use crate::scanner::{ Tokens, Literal as LiteralValue };
-use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr };
+use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call/*, Callable*/ };
 // use std::collections::HashMap;
 use crate::environment::{ Environment };
 
@@ -13,18 +13,22 @@ pub enum RuntimeError {
 	InvalidUnaryOp(Tokens),
 	InvalidUnaryLiteral(LiteralValue),
 	UndefinedVariable(String),
+	UndefinedFunction(String),
+	// InvalidCallable(LiteralValue),
+	MismatchedArguments(usize, usize),
+	Return(LiteralValue),
 }
 
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
 pub type RuntimeValue = RuntimeResult<LiteralValue>;
 
-pub struct ASTEvaluator<'declarator> {
-    stack: &'declarator mut Environment
+pub struct ASTEvaluator<'declarator, 'parser> {
+    stack: &'declarator mut Environment<'parser>
 }
 
-impl<'declarator> ASTEvaluator<'declarator> {
-    pub fn new(map: &'declarator mut Environment)
-    -> ASTEvaluator<'declarator>
+impl<'declarator, 'parser> ASTEvaluator<'declarator, 'parser> {
+    pub fn new(map: &'declarator mut Environment<'parser>)
+    -> ASTEvaluator<'declarator, 'parser>
     {
         ASTEvaluator { stack: map }
     }
@@ -57,7 +61,7 @@ impl<'declarator> ASTEvaluator<'declarator> {
     }
 }
 
-impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'declarator> {
+impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'declarator, 'parser> {
 	fn visit_binary<'evaluator>(&'evaluator mut self, expr: &'parser Binary) -> RuntimeValue {
 		let left = expr.left.evaluate(self)?;
 		let right = expr.right.evaluate(self)?;
@@ -201,5 +205,13 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
             }
             _ => return Err(RuntimeError::InvalidConditional(val.clone()))
         }
+	}
+
+	fn visit_call(&mut self, expr: &'parser Call) -> RuntimeValue {
+        let mut literal_args = Vec::new();
+        for arg in &expr.args {
+            literal_args.push(arg.evaluate(self)?);
+        }
+        self.stack.call_fxn(&expr.identifier.lexeme, &literal_args)
 	}
 }

@@ -1,5 +1,5 @@
 use crate::scanner::Literal;
-use crate::stmts::{ StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop };
+use crate::stmts::{ StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt };
 // use crate::exprs::{ Expr };
 // use crate::scanner::{ Literal };
 use crate::environment::{ Environment };
@@ -7,13 +7,13 @@ use crate::evaluator::{ ASTEvaluator, RuntimeResult, RuntimeError };
 // use std::collections::HashMap;
 
 pub struct ASTDeclarator<'parser> {
-    stack: &'parser mut Environment
+    stack: &'parser mut Environment<'parser>
 }
 
 pub type RuntimeDeclaration = RuntimeResult<()>;
 
 impl<'parser> ASTDeclarator<'parser> {
-    pub fn new(stack: &'parser mut Environment) -> ASTDeclarator<'parser> {
+    pub fn new(stack: &'parser mut Environment<'parser>) -> ASTDeclarator<'parser> {
         ASTDeclarator { stack }
     }
 }
@@ -94,5 +94,21 @@ impl<'parser> StmtVisitor<'parser, RuntimeDeclaration> for ASTDeclarator<'parser
             if !matches!(val, Literal::Bool(_)) { return Err(RuntimeError::InvalidConditional(val.clone())) }
         }
         Ok(())
+    }
+
+	fn visit_fxn(&mut self, stmt: &'parser FunStmt) -> RuntimeDeclaration {
+        self.stack.store_fxn(stmt);
+        Ok(())
+    }
+
+	fn visit_return(&mut self, stmt: &'parser ReturnStmt) -> RuntimeDeclaration {
+        let mut eval = ASTEvaluator::new(self.stack);
+        match &stmt.expression {
+            None => Err(RuntimeError::Return(Literal::Nil)),
+            Some(expr) => {
+                let val = expr.evaluate(&mut eval)?;
+                Err(RuntimeError::Return(val))
+            }
+        }
     }
 }

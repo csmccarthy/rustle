@@ -1,23 +1,28 @@
+use crate::declarator::ASTDeclarator;
 // use crate::exprs::{ Expr };
-use crate::evaluator::{ RuntimeError, RuntimeResult };
+use crate::evaluator::{ RuntimeError, RuntimeResult, RuntimeValue };
 use crate::scanner::Literal;
+use crate::stmts::FunStmt;
 // use crate::scanner::{ Literal };
 
 use std::collections::HashMap;
 
-pub struct Environment {
+
+
+pub struct Environment<'parser> {
     // stack: Vec<HashMap<String, &'parser Box<dyn Expr>>> // TODO: Revisit once you figure out cycles
-    stack: Vec<HashMap<String, Literal>>
+    stack: Vec<HashMap<String, Literal>>,
+    functions: HashMap<String, &'parser FunStmt>
 }
 
 
 
-impl Environment {
-    pub fn new() -> Environment {
+impl<'parser> Environment<'parser> {
+    pub fn new() -> Environment<'parser> {
         let global = HashMap::new();
         let mut stack = Vec::new();
         stack.push(global);
-        Environment { stack }
+        Environment { stack, functions: HashMap::new() }
     }
 
     pub fn define(&mut self, name: String, expr: Literal) -> RuntimeResult<()> {
@@ -61,19 +66,46 @@ impl Environment {
             let scope = self.stack.get(i).unwrap();
             let frame: &HashMap<String, Literal> = scope.into();
             if let Some(expr) = frame.get(name) { return Ok(expr.clone()); }
-        } 
-        // println!("not found :(");
+        }
         return Err(RuntimeError::UndefinedVariable(name.to_owned()));
     }
 
     pub fn nest(&mut self) {
-        // println!("nesting");
         let frame = HashMap::new();
         self.stack.push(frame);
     }
 
     pub fn unnest(&mut self) {
-        // println!("unnesting");
         self.stack.pop();
+    }
+
+    pub fn store_fxn(&mut self, fxn: &'parser FunStmt) {
+        self.functions.insert(fxn.name.lexeme.clone(), fxn);
+    }
+
+    pub fn get_fxn(&self, name: &str) -> Option<&&FunStmt> {
+        self.functions.get(name)
+    }
+
+    pub fn call_fxn(&self, name: &str, args: &Vec<Literal>) -> RuntimeValue {
+        let fxn_opt = self.get_fxn(name);
+        let fxn = match fxn_opt {
+            None => return Err(RuntimeError::UndefinedFunction(name.to_owned())),
+            Some(f) => f
+        };
+        if fxn.params.len() != args.len() {
+            return Err(RuntimeError::MismatchedArguments(fxn.params.len(), args.len()));
+        }
+        let mut fxn_env = Environment::new();
+        for arg_item in args.iter().zip(&fxn.params) {
+            fxn_env.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
+        }
+        let mut decl = ASTDeclarator::new(&mut fxn_env);
+        match fxn.block.execute(&mut decl) {
+            Ok(_) => Ok(Literal::Nil),
+            Err(RuntimeError::Return(literal)) => Ok(literal),
+            Err(e) => Err(e),
+        }
+        
     }
 }

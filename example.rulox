@@ -1,11 +1,10 @@
-var a = 0;
-while a < 5 {
-    print a;
-    a = a + 1;
+fun test() {
+    print "hi";
+    fun test2() {
+        print "inner";
+    }
+    test2();
+    return test2;
 }
-print "loop exited! :)";
-
-for var c = 0; c < 5; c = c + 1 {
-    print c;
-}
-print "second loop exited!!";
+var a = test();
+a();

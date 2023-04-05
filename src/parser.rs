@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr };
-use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop };
+use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call };
+use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt };
 use crate::scanner::{ Token, Tokens, Literal as LiteralValue };
 
 pub struct Parser {
@@ -90,7 +90,8 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> ParseResult<Box<dyn Stmt>> {
-        if self.match_token(Tokens::Var) { return Ok(self.decl_stmt()?) }
+        if self.match_token(Tokens::Var) { return Ok(self.var_decl()?) }
+        if self.match_token(Tokens::Fun) { return Ok(self.fun_decl()?) }
         self.stmt()
     }
 
@@ -100,7 +101,15 @@ impl Parser {
         else if self.match_token(Tokens::If) { return Ok(self.if_stmt()?) }
         else if self.match_token(Tokens::While) { return Ok(self.while_loop()?) }
         else if self.match_token(Tokens::For) { return Ok(self.for_loop()?) }
+        else if self.match_token(Tokens::Return) { return Ok(self.return_stmt()?) }
         self.expression_stmt()
+    }
+
+    fn return_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        return match self.expression() {
+            Err(_) => Ok(self.push_return_stmt(None)),
+            Ok(exp) => Ok(self.push_return_stmt(Some(exp))),
+        }
     }
 
     fn while_loop(&mut self) -> ParseResult<Box<dyn Stmt>> {
@@ -114,7 +123,7 @@ impl Parser {
 
     fn for_loop(&mut self) -> ParseResult<Box<dyn Stmt>> {
         let init: Box<dyn Stmt>;
-        if self.match_token(Tokens::Var) { init = self.decl_stmt()? }
+        if self.match_token(Tokens::Var) { init = self.var_decl()? }
         else { init = self.expression_stmt()? }
         if !self.match_token(Tokens::Semicolon) {
             return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
@@ -155,10 +164,10 @@ impl Parser {
         {
             let stmt = self.declaration()?;
             let needs_semicolon = stmt.needs_semicolon();
-            stmts.push(stmt);
             if needs_semicolon && !self.match_token(Tokens::Semicolon) {
                 return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
             }
+            stmts.push(stmt);
         }
         if self.peek().is_none() || self.previous().unwrap().token_type == Tokens::EOF {
             return Err(SyntaxError::EOFReached);
@@ -166,7 +175,7 @@ impl Parser {
         Ok(self.push_block(stmts))
     }
 
-    fn decl_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
+    fn var_decl(&mut self) -> ParseResult<Box<dyn Stmt>> {
         let name = match self.advance() {
             None => return Err(SyntaxError::EOFReached),
             Some(tk) if tk.token_type == Tokens::Identifier => {
@@ -180,6 +189,44 @@ impl Parser {
         }
         let expr = self.push_literal(LiteralValue::Nil);
         Ok(self.push_var_stmt(name, expr))
+    }
+
+    fn extract_name(&mut self) -> ParseResult<Token> {
+        match self.advance() {
+            None => return Err(SyntaxError::EOFReached),
+            Some(tk) if tk.token_type == Tokens::Identifier => {
+                Ok(tk.clone())
+            }
+            Some(_) => return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        }
+    }
+
+    fn fun_decl(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let name = self.extract_name()?;
+        if !self.match_token(Tokens::LeftParenthesis) {
+            return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()))
+        }
+        let mut params = Vec::new();
+        if self.match_token(Tokens::RightParenthesis) {
+            if !self.match_token(Tokens::LeftBrace) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+            }
+            let block = self.block()?;
+            return Ok(self.push_fxn(name, params, block));
+        } else {
+            params.push(self.extract_name()?);
+            while self.match_token(Tokens::Comma) {
+                params.push(self.extract_name()?);
+            }
+            if !self.match_token(Tokens::RightParenthesis) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()));
+            }
+            if !self.match_token(Tokens::LeftBrace) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+            }
+            let block = self.block()?;
+            return Ok(self.push_fxn(name, params, block));
+        }
     }
 
     fn expression_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
@@ -277,7 +324,37 @@ impl Parser {
             let right = self.unary()?;
             return Ok(self.push_unary(operator, right));
         }
-        self.primary()
+        self.call()
+    }
+
+    fn call(&mut self) -> ParseResult<Box<dyn Expr>> {
+        let expr = self.primary()?;
+        let identifier = match self.previous() {
+            Some(tk) if tk.token_type == Tokens::Identifier => {
+                Some(tk.clone())
+            },
+            _ => None
+        };
+        if let Some(tk) = identifier {
+            loop {
+                if self.match_token(Tokens::LeftParenthesis) {
+                    let mut args = Vec::new();
+                    if self.match_token(Tokens::RightParenthesis) {
+                        return Ok(self.push_call(tk, args));
+                    } else {
+                        args.push(self.assignment()?);
+                        while self.match_token(Tokens::Comma) {
+                            args.push(self.assignment()?);
+                        }
+                        if !self.match_token(Tokens::RightParenthesis) {
+                            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()));
+                        }
+                        return Ok(self.push_call(tk, args));
+                    }
+                } else { break; }
+            }
+        }
+        Ok(expr)
     }
 
     fn primary(&mut self) -> ParseResult<Box<dyn Expr>> {
@@ -310,8 +387,14 @@ impl Parser {
         Err(SyntaxError::ExpectedLiteral(self.peek().unwrap().line, Vec::new()))
     }
 
+    fn push_return_stmt(&mut self, expression: Option<Box<dyn Expr>>) -> Box<dyn Stmt>
+    { Box::new(ReturnStmt { expression }) }
+
     fn push_var_stmt(&mut self, name: String, expression: Box<dyn Expr>) -> Box<dyn Stmt>
     { Box::new(VarStmt { name, expression }) }
+
+    fn push_fxn(&mut self, name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> Box<dyn Stmt>
+    { Box::new(FunStmt { name, params, block }) }
 
     fn push_while_loop(&mut self, condition: Box<dyn Expr>, block: Box<dyn Stmt>) -> Box<dyn Stmt>
     { Box::new(WhileLoop { condition, block }) }
@@ -335,6 +418,9 @@ impl Parser {
 
     fn push_literal(&mut self, literal: LiteralValue) -> Box<dyn Expr>
     { Box::new(Literal { value: literal }) }
+
+    fn push_call(&mut self, identifier: Token, args: Vec<Box<dyn Expr>>) -> Box<dyn Expr>
+    { Box::new(Call { identifier, args }) }
 
     fn push_unary(&mut self, operator: Token, right: Box<dyn Expr>) -> Box<dyn Expr>
     { Box::new(Unary { operator, right }) }
