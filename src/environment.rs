@@ -2,7 +2,7 @@ use crate::declarator::ASTDeclarator;
 // use crate::exprs::{ Expr };
 use crate::evaluator::{ RuntimeError, RuntimeResult, RuntimeValue };
 use crate::scanner::Literal;
-use crate::stmts::FunStmt;
+use crate::stmts::{ FunStmt, FunStmtAux };
 // use crate::scanner::{ Literal };
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -123,6 +123,29 @@ impl Environment {
         println!("-----");
     }
 
+    fn call_fxn_block(&mut self, args: &Vec<Literal>, fxn_aux: &mut Rc<FunStmtAux>) -> RuntimeValue {
+        self.nest(); // This nest creates a new stack frame for function arguments
+        for arg_item in args.iter().zip(&fxn_aux.params) {
+            if let Literal::Func(name) = arg_item.0 {
+                self.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name));
+            }
+            self.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
+        }
+        let mut decl = ASTDeclarator::new(self);
+        let res = fxn_aux.block.execute(&mut decl);
+        self.unnest();
+        match res {
+            Ok(_) => Ok(Literal::Nil),
+            Err(RuntimeError::Return(literal)) => {
+                if let Literal::Func(name) = &literal {
+                    self.current_scope_mut().insert(literal.to_string(), Literal::Func(*name));
+                }
+                Ok(literal)
+            },
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn call_fxn(&mut self, name: &str, args: &Vec<Literal>) -> RuntimeValue {
         let literal_opt = self.get(name);
         let fxn_literal = match literal_opt {
@@ -142,57 +165,12 @@ impl Environment {
         if fxn.aux.params.len() != args.len() {
             return Err(RuntimeError::MismatchedArguments(fxn.aux.params.len(), args.len()));
         }
-        let borrow = fxn.clone();
+        let mut borrow = fxn.clone();
         drop(unlocked_fxn);
 
         return match borrow.closure {
-            None => {
-                self.nest(); // This nest creates a new stack frame for function arguments
-                for arg_item in args.iter().zip(&borrow.aux.params) {
-                    if let Literal::Func(name) = arg_item.0 {
-                        self.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name));
-                    }
-                    // println!("{} {}", arg_item.1.lexeme.to_owned(), arg_item.0.to_owned());
-                    self.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
-                }
-                let mut decl = ASTDeclarator::new(self);
-                let res = borrow.aux.block.execute(&mut decl);
-                self.unnest();
-                match res {
-                    Ok(_) => Ok(Literal::Nil),
-                    Err(RuntimeError::Return(literal)) => {
-                        if let Literal::Func(name) = &literal {
-                            self.current_scope_mut().insert(literal.to_string(), Literal::Func(*name));
-                        }
-                        Ok(literal)
-                    },
-                    Err(e) => Err(e),
-                }
-            },
-            Some(mut env) => {
-
-                env.nest(); // This nest creates a new stack frame for function arguments
-                for arg_item in args.iter().zip(&borrow.aux.params) {
-                    if let Literal::Func(name) = arg_item.0 {
-                        env.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name));
-                    }
-                    // println!("{} {}", arg_item.1.lexeme.to_owned(), arg_item.0.to_owned());
-                    env.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
-                }
-                let mut decl = ASTDeclarator::new(&mut env);
-                let res = borrow.aux.block.execute(&mut decl);
-                env.unnest();
-                match res {
-                    Ok(_) => Ok(Literal::Nil),
-                    Err(RuntimeError::Return(literal)) => {
-                        if let Literal::Func(name) = &literal {
-                            env.current_scope_mut().insert(literal.to_string(), Literal::Func(*name));
-                        }
-                        Ok(literal)
-                    },
-                    Err(e) => Err(e),
-                }
-            }
+            None => { self.call_fxn_block(args, &mut borrow.aux) },
+            Some(mut env) => { env.call_fxn_block(args, &mut borrow.aux) },
         }
         
     }
