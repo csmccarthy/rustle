@@ -2,8 +2,12 @@
 
 // use crate::evaluator::{ RuntimeValue };
 use crate::declarator::{ ASTDeclarator, RuntimeDeclaration };
+use crate::environment::Environment;
 use crate::exprs::{ Expr };
 use crate::scanner::Token;
+
+// use std::cell::{ RefCell };
+use std::sync::Arc;
 
 pub trait StmtVisitor<'parser, R> {
 	fn visit_expr(&mut self, expr: &'parser ExprStmt) -> R;
@@ -25,6 +29,10 @@ pub trait NeedsSemicolon {
     fn needs_semicolon(&self) -> bool;
 }
 
+pub trait FunctionDef {
+    fn function_def(&self) -> Option<FunStmt>;
+}
+
 pub trait Stmt: Executable+NeedsSemicolon {}
 
 
@@ -44,6 +52,10 @@ impl NeedsSemicolon for ExprStmt {
 	fn needs_semicolon(&self) -> bool { true }
 }
 
+impl FunctionDef for ExprStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
 
 pub struct Print {
     pub expression: Box<dyn Expr>,
@@ -59,6 +71,10 @@ impl Executable for Print {
 
 impl NeedsSemicolon for Print {
 	fn needs_semicolon(&self) -> bool { true }
+}
+
+impl FunctionDef for Print {
+	fn function_def(&self) -> Option<FunStmt> { None }
 }
 
 
@@ -79,6 +95,10 @@ impl NeedsSemicolon for VarStmt {
 	fn needs_semicolon(&self) -> bool { true }
 }
 
+impl FunctionDef for VarStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
 
 pub struct BlockStmt {
     pub stmts: Vec<Box<dyn Stmt>>,
@@ -94,6 +114,10 @@ impl Executable for BlockStmt {
 
 impl NeedsSemicolon for BlockStmt {
 	fn needs_semicolon(&self) -> bool { false }
+}
+
+impl FunctionDef for BlockStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
 }
 
 
@@ -115,6 +139,10 @@ impl NeedsSemicolon for IfStmt {
 	fn needs_semicolon(&self) -> bool { false }
 }
 
+impl FunctionDef for IfStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
 
 pub struct WhileLoop {
     pub condition: Box<dyn Expr>,
@@ -131,6 +159,10 @@ impl Executable for WhileLoop {
 
 impl NeedsSemicolon for WhileLoop {
 	fn needs_semicolon(&self) -> bool { false }
+}
+
+impl FunctionDef for WhileLoop {
+	fn function_def(&self) -> Option<FunStmt> { None }
 }
 
 
@@ -153,14 +185,40 @@ impl NeedsSemicolon for ForLoop {
 	fn needs_semicolon(&self) -> bool { false }
 }
 
+impl FunctionDef for ForLoop {
+	fn function_def(&self) -> Option<FunStmt> { None }
+}
 
-pub struct FunStmt {
+// #[derive(Clone)]
+pub struct FunStmtAux {
     pub name: Token,
     pub params: Vec<Token>,
     pub block: Box<dyn Stmt>,
 }
 
+
+pub struct FunStmt {
+	pub aux: Arc<FunStmtAux>,
+	pub closure: Option<Environment>,
+}
+
+impl FunStmt {
+	pub fn new(name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> FunStmt {
+		FunStmt { aux: Arc::new(FunStmtAux { name, params, block }), closure: None }
+	}
+
+	pub fn new_boxed(name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> Box<FunStmt> {
+		Box::new(FunStmt::new(name, params, block))
+	}
+}
+
 impl Stmt for FunStmt {}
+
+impl Clone for FunStmt {
+	fn clone(&self) -> Self {
+		FunStmt { aux: self.aux.clone(), closure: self.closure.clone() }
+	}
+}
 
 impl Executable for FunStmt {
 	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
@@ -170,6 +228,12 @@ impl Executable for FunStmt {
 
 impl NeedsSemicolon for FunStmt {
 	fn needs_semicolon(&self) -> bool { false }
+}
+
+impl FunctionDef for FunStmt {
+	fn function_def(&self) -> Option<FunStmt> {
+		Some(self.clone())
+	}
 }
 
 
@@ -187,5 +251,9 @@ impl Executable for ReturnStmt {
 
 impl NeedsSemicolon for ReturnStmt {
 	fn needs_semicolon(&self) -> bool { true }
+}
+
+impl FunctionDef for ReturnStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
 }
 

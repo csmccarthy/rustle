@@ -1,8 +1,25 @@
-fun test() {
-    fun test2() {
+var hehe = "global var";
+
+fun outer() {
+
+    var closed = "closed";
+
+    fun inner() {
         print "inner";
+        print closed;
+        print hehe;
+        return "a";
     }
-    return test2;
+    inner();
+    return inner;
 }
-var a = test();
+
+fun callOther(arg) {
+    arg();
+}
+
+var a = outer();
+//var b = a;
+//callOther(b);
+//outer()
 a();

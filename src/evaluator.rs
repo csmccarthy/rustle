@@ -22,13 +22,13 @@ pub enum RuntimeError {
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
 pub type RuntimeValue = RuntimeResult<LiteralValue>;
 
-pub struct ASTEvaluator<'declarator, 'parser> {
-    stack: &'declarator mut Environment<'parser>
+pub struct ASTEvaluator<'declarator> {
+    stack: &'declarator mut Environment
 }
 
-impl<'declarator, 'parser> ASTEvaluator<'declarator, 'parser> {
-    pub fn new(map: &'declarator mut Environment<'parser>)
-    -> ASTEvaluator<'declarator, 'parser>
+impl<'declarator> ASTEvaluator<'declarator> {
+    pub fn new(map: &'declarator mut Environment)
+    -> ASTEvaluator<'declarator>
     {
         ASTEvaluator { stack: map }
     }
@@ -61,7 +61,7 @@ impl<'declarator, 'parser> ASTEvaluator<'declarator, 'parser> {
     }
 }
 
-impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'declarator, 'parser> {
+impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'declarator> {
 	fn visit_binary<'evaluator>(&'evaluator mut self, expr: &'parser Binary) -> RuntimeValue {
 		let left = expr.left.evaluate(self)?;
 		let right = expr.right.evaluate(self)?;

@@ -212,7 +212,7 @@ impl Parser {
                 return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
             }
             let block = self.block()?;
-            return Ok(self.push_fxn(name, params, block));
+            return Ok(FunStmt::new_boxed(name, params, block));
         } else {
             params.push(self.extract_name()?);
             while self.match_token(Tokens::Comma) {
@@ -225,7 +225,7 @@ impl Parser {
                 return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
             }
             let block = self.block()?;
-            return Ok(self.push_fxn(name, params, block));
+            return Ok(FunStmt::new_boxed(name, params, block));
         }
     }
 
@@ -392,9 +392,6 @@ impl Parser {
 
     fn push_var_stmt(&mut self, name: String, expression: Box<dyn Expr>) -> Box<dyn Stmt>
     { Box::new(VarStmt { name, expression }) }
-
-    fn push_fxn(&mut self, name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> Box<dyn Stmt>
-    { Box::new(FunStmt { name, params, block }) }
 
     fn push_while_loop(&mut self, condition: Box<dyn Expr>, block: Box<dyn Stmt>) -> Box<dyn Stmt>
     { Box::new(WhileLoop { condition, block }) }

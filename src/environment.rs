@@ -5,20 +5,20 @@ use crate::scanner::Literal;
 use crate::stmts::FunStmt;
 // use crate::scanner::{ Literal };
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
 
+static GLOBAL_FXN_ID: AtomicUsize = AtomicUsize::new(0);
 
-
-pub struct Environment<'parser> {
-    // stack: Vec<HashMap<String, &'parser Box<dyn Expr>>> // TODO: Revisit once you figure out cycles
+pub struct Environment {
     stack: Vec<HashMap<String, Literal>>,
-    functions: HashMap<String, &'parser FunStmt>
+    functions: HashMap<usize, FunStmt>,
 }
 
 
 
-impl<'parser> Environment<'parser> {
-    pub fn new() -> Environment<'parser> {
+impl Environment {
+    pub fn new() -> Environment {
         let global = HashMap::new();
         let mut stack = Vec::new();
         stack.push(global);
@@ -52,12 +52,20 @@ impl<'parser> Environment<'parser> {
     }
 
     fn get_idx(&self, name: &str) -> Option<usize> {
-        for stack_item in self.stack.iter().enumerate() {
+        for stack_item in self.stack.iter().enumerate().rev() {
             let frame: &HashMap<String, Literal> = stack_item.1;
             if let Some(_) = frame.get(name) { return Some(stack_item.0); }
         }
         None
     }
+
+    // fn get_idx_rev(&self, name: &str) -> Option<usize> {
+    //     for stack_item in self.stack.iter().enumerate() {
+    //         let frame: &HashMap<String, Literal> = stack_item.1;
+    //         if let Some(_) = frame.get(name) { return Some(stack_item.0); }
+    //     }
+    //     None
+    // }
 
     pub fn get(&self, name: &str) -> RuntimeResult<Literal> {
 		let stack_opt = self.current_scope().get(name);
@@ -70,61 +78,71 @@ impl<'parser> Environment<'parser> {
         return Err(RuntimeError::UndefinedVariable(name.to_owned()));
     }
 
+    // pub fn get_rev(&self, name: &str) -> RuntimeResult<Literal> {
+	// 	let stack_opt = self.stack.get(0).unwrap().get(name);
+    //     if let Some(expr) = stack_opt { return Ok(expr.clone()); }
+    //     for i in 0..self.stack.len() {
+    //         let scope = self.stack.get(i).unwrap();
+    //         let frame: &HashMap<String, Literal> = scope.into();
+    //         if let Some(expr) = frame.get(name) { return Ok(expr.clone()); }
+    //     }
+    //     return Err(RuntimeError::UndefinedVariable(name.to_owned()));
+    // }
+
     pub fn nest(&mut self) {
+        // println!("nesting");
         let frame = HashMap::new();
         self.stack.push(frame);
     }
 
     pub fn unnest(&mut self) {
+        // println!("unnesting");
         self.stack.pop();
     }
 
-    pub fn store_fxn(&mut self, fxn: &'parser FunStmt) {
-        self.functions.insert(fxn.name.lexeme.clone(), fxn);
-        self.current_scope_mut().insert(fxn.name.lexeme.clone(), Literal::Func(fxn.name.lexeme.clone()));
-    }
-
-    pub fn get_fxn(&self, name: &str) -> Option<&Literal> {
-        self.current_scope().get(name)
+    pub fn store_fxn(&mut self, fxn: &FunStmt) {
+        let name = &fxn.aux.name.lexeme;
+        let fxn_uid: usize = GLOBAL_FXN_ID.fetch_add(1, Ordering::SeqCst).into();
+        self.functions.insert(fxn_uid, fxn.clone());
+        // println!("{}", fxn_uid);
+        self.current_scope_mut().insert(name.clone(), Literal::Func(fxn_uid));
     }
 
     pub fn call_fxn(&mut self, name: &str, args: &Vec<Literal>) -> RuntimeValue {
-        let literal_opt = self.get_fxn(name);
+        let literal_opt = self.get(name);
         let fxn_literal = match literal_opt {
-            None => { println!("here"); return Err(RuntimeError::UndefinedFunction(name.to_owned())) },
-            Some(f) => f
+            Err(_) => { println!("here"); return Err(RuntimeError::UndefinedFunction(name.to_owned())) },
+            Ok(f) => f
         };
         let fxn_opt = match fxn_literal {
-            Literal::Func(name) => self.functions.get(name),
+            Literal::Func(name) => self.functions.get(&name),
             _ => return Err(RuntimeError::InvalidCallable(fxn_literal.clone()))
         };
         let fxn = match fxn_opt {
             None => { println!("no, here"); return Err(RuntimeError::UndefinedFunction(name.to_owned())) },
             Some(f) => f
         };
-        if fxn.params.len() != args.len() {
-            return Err(RuntimeError::MismatchedArguments(fxn.params.len(), args.len()));
+        if fxn.aux.params.len() != args.len() {
+            return Err(RuntimeError::MismatchedArguments(fxn.aux.params.len(), args.len()));
         }
-        let mut fxn_env = Environment::new();
-        for arg_item in args.iter().zip(&fxn.params) {
-            fxn_env.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
+        let borrow = fxn.clone();
+        self.nest(); // This nest creates a new stack frame for function arguments
+        for arg_item in args.iter().zip(&borrow.aux.params) {
+            if let Literal::Func(name) = arg_item.0 {
+                self.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name));
+            }
+            // println!("{} {}", arg_item.1.lexeme.to_owned(), arg_item.0.to_owned());
+            self.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
         }
-        let mut decl = ASTDeclarator::new(&mut fxn_env);
-        let res = fxn.block.execute(&mut decl);
-        drop(decl);
+        let mut decl = ASTDeclarator::new(self);
+        let res = borrow.aux.block.execute(&mut decl);
+        self.unnest();
         match res {
             Ok(_) => Ok(Literal::Nil),
             Err(RuntimeError::Return(literal)) => {
-                // let mut env = fxn_env.get_closure();
-                // if let Literal::Func(name) = &literal {
-                //     let lambda = fxn_env.functions.get(name).unwrap();
-                //     self.store_fxn(lambda);
-                // }
-                // match literal {
-                //     Literal::Func(name) => {
-                //     }
-                //     _ => return Ok(literal)
-                // }
+                if let Literal::Func(name) = &literal {
+                    self.current_scope_mut().insert(literal.to_string(), Literal::Func(*name));
+                }
                 Ok(literal)
             },
             Err(e) => Err(e),
