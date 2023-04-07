@@ -7,12 +7,15 @@ use crate::stmts::FunStmt;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
+use std::sync::{ RwLock };
+use std::rc::Rc;
+// use std::sync::RwLock;
 
 static GLOBAL_FXN_ID: AtomicUsize = AtomicUsize::new(0);
 
 pub struct Environment {
     stack: Vec<HashMap<String, Literal>>,
-    functions: HashMap<usize, FunStmt>,
+    functions: Rc<RwLock<HashMap<usize, FunStmt>>>,
 }
 
 
@@ -22,7 +25,7 @@ impl Environment {
         let global = HashMap::new();
         let mut stack = Vec::new();
         stack.push(global);
-        Environment { stack, functions: HashMap::new() }
+        Environment { stack, functions: Rc::new(RwLock::new(HashMap::new())) }
     }
 
     pub fn define(&mut self, name: String, expr: Literal) -> RuntimeResult<()> {
@@ -103,9 +106,21 @@ impl Environment {
     pub fn store_fxn(&mut self, fxn: &FunStmt) {
         let name = &fxn.aux.name.lexeme;
         let fxn_uid: usize = GLOBAL_FXN_ID.fetch_add(1, Ordering::SeqCst).into();
-        self.functions.insert(fxn_uid, fxn.clone());
-        // println!("{}", fxn_uid);
+        // let test = self.functions.
         self.current_scope_mut().insert(name.clone(), Literal::Func(fxn_uid));
+        // println!("{}", fxn_uid);
+        let mut fxn_clone = fxn.clone();
+        let closure = self.clone();
+        fxn_clone.closure = Some(closure);
+        // println!("before write lock");
+        self.functions.write().unwrap().insert(fxn_uid, fxn_clone);
+        // println!("after write lock");
+        for frame in &self.stack {
+            for key in frame.keys() {
+                println!("{}", key);
+            }
+        }
+        println!("-----");
     }
 
     pub fn call_fxn(&mut self, name: &str, args: &Vec<Literal>) -> RuntimeValue {
@@ -114,8 +129,10 @@ impl Environment {
             Err(_) => { println!("here"); return Err(RuntimeError::UndefinedFunction(name.to_owned())) },
             Ok(f) => f
         };
+        let fxn_clone = self.functions.clone();
+        let unlocked_fxn = fxn_clone.read().unwrap();
         let fxn_opt = match fxn_literal {
-            Literal::Func(name) => self.functions.get(&name),
+            Literal::Func(name) => unlocked_fxn.get(&name),
             _ => return Err(RuntimeError::InvalidCallable(fxn_literal.clone()))
         };
         let fxn = match fxn_opt {
@@ -126,27 +143,63 @@ impl Environment {
             return Err(RuntimeError::MismatchedArguments(fxn.aux.params.len(), args.len()));
         }
         let borrow = fxn.clone();
-        self.nest(); // This nest creates a new stack frame for function arguments
-        for arg_item in args.iter().zip(&borrow.aux.params) {
-            if let Literal::Func(name) = arg_item.0 {
-                self.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name));
-            }
-            // println!("{} {}", arg_item.1.lexeme.to_owned(), arg_item.0.to_owned());
-            self.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
-        }
-        let mut decl = ASTDeclarator::new(self);
-        let res = borrow.aux.block.execute(&mut decl);
-        self.unnest();
-        match res {
-            Ok(_) => Ok(Literal::Nil),
-            Err(RuntimeError::Return(literal)) => {
-                if let Literal::Func(name) = &literal {
-                    self.current_scope_mut().insert(literal.to_string(), Literal::Func(*name));
+        drop(unlocked_fxn);
+
+        return match borrow.closure {
+            None => {
+                self.nest(); // This nest creates a new stack frame for function arguments
+                for arg_item in args.iter().zip(&borrow.aux.params) {
+                    if let Literal::Func(name) = arg_item.0 {
+                        self.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name));
+                    }
+                    // println!("{} {}", arg_item.1.lexeme.to_owned(), arg_item.0.to_owned());
+                    self.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
                 }
-                Ok(literal)
+                let mut decl = ASTDeclarator::new(self);
+                let res = borrow.aux.block.execute(&mut decl);
+                self.unnest();
+                match res {
+                    Ok(_) => Ok(Literal::Nil),
+                    Err(RuntimeError::Return(literal)) => {
+                        if let Literal::Func(name) = &literal {
+                            self.current_scope_mut().insert(literal.to_string(), Literal::Func(*name));
+                        }
+                        Ok(literal)
+                    },
+                    Err(e) => Err(e),
+                }
             },
-            Err(e) => Err(e),
+            Some(mut env) => {
+
+                env.nest(); // This nest creates a new stack frame for function arguments
+                for arg_item in args.iter().zip(&borrow.aux.params) {
+                    if let Literal::Func(name) = arg_item.0 {
+                        env.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name));
+                    }
+                    // println!("{} {}", arg_item.1.lexeme.to_owned(), arg_item.0.to_owned());
+                    env.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
+                }
+                let mut decl = ASTDeclarator::new(&mut env);
+                let res = borrow.aux.block.execute(&mut decl);
+                env.unnest();
+                match res {
+                    Ok(_) => Ok(Literal::Nil),
+                    Err(RuntimeError::Return(literal)) => {
+                        if let Literal::Func(name) = &literal {
+                            env.current_scope_mut().insert(literal.to_string(), Literal::Func(*name));
+                        }
+                        Ok(literal)
+                    },
+                    Err(e) => Err(e),
+                }
+            }
         }
         
+    }
+}
+
+impl Clone for Environment {
+    fn clone(&self) -> Self {
+        Environment { stack: self.stack.clone(), functions: self.functions.clone() }
     }
 }

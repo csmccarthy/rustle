@@ -7,7 +7,8 @@ use crate::exprs::{ Expr };
 use crate::scanner::Token;
 
 // use std::cell::{ RefCell };
-use std::sync::Arc;
+// use std::sync::Arc;
+use std::rc::{ Rc };
 
 pub trait StmtVisitor<'parser, R> {
 	fn visit_expr(&mut self, expr: &'parser ExprStmt) -> R;
@@ -198,13 +199,13 @@ pub struct FunStmtAux {
 
 
 pub struct FunStmt {
-	pub aux: Arc<FunStmtAux>,
+	pub aux: Rc<FunStmtAux>,
 	pub closure: Option<Environment>,
 }
 
 impl FunStmt {
 	pub fn new(name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> FunStmt {
-		FunStmt { aux: Arc::new(FunStmtAux { name, params, block }), closure: None }
+		FunStmt { aux: Rc::new(FunStmtAux { name, params, block }), closure: None }
 	}
 
 	pub fn new_boxed(name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> Box<FunStmt> {
