@@ -1,15 +1,12 @@
 use crate::declarator::ASTDeclarator;
-// use crate::exprs::{ Expr };
 use crate::evaluator::{ RuntimeError, RuntimeResult, RuntimeValue };
 use crate::scanner::Literal;
 use crate::stmts::{ FunStmt, FunStmtAux };
-// use crate::scanner::{ Literal };
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
 use std::sync::{ RwLock };
 use std::rc::Rc;
-// use std::sync::RwLock;
 
 static GLOBAL_FXN_ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -62,14 +59,6 @@ impl Environment {
         None
     }
 
-    // fn get_idx_rev(&self, name: &str) -> Option<usize> {
-    //     for stack_item in self.stack.iter().enumerate() {
-    //         let frame: &HashMap<String, Literal> = stack_item.1;
-    //         if let Some(_) = frame.get(name) { return Some(stack_item.0); }
-    //     }
-    //     None
-    // }
-
     pub fn get(&self, name: &str) -> RuntimeResult<Literal> {
 		let stack_opt = self.current_scope().get(name);
         if let Some(expr) = stack_opt { return Ok(expr.clone()); }
@@ -81,46 +70,23 @@ impl Environment {
         return Err(RuntimeError::UndefinedVariable(name.to_owned()));
     }
 
-    // pub fn get_rev(&self, name: &str) -> RuntimeResult<Literal> {
-	// 	let stack_opt = self.stack.get(0).unwrap().get(name);
-    //     if let Some(expr) = stack_opt { return Ok(expr.clone()); }
-    //     for i in 0..self.stack.len() {
-    //         let scope = self.stack.get(i).unwrap();
-    //         let frame: &HashMap<String, Literal> = scope.into();
-    //         if let Some(expr) = frame.get(name) { return Ok(expr.clone()); }
-    //     }
-    //     return Err(RuntimeError::UndefinedVariable(name.to_owned()));
-    // }
-
     pub fn nest(&mut self) {
-        // println!("nesting");
         let frame = HashMap::new();
         self.stack.push(frame);
     }
 
     pub fn unnest(&mut self) {
-        // println!("unnesting");
         self.stack.pop();
     }
 
     pub fn store_fxn(&mut self, fxn: &FunStmt) {
         let name = &fxn.aux.name.lexeme;
         let fxn_uid: usize = GLOBAL_FXN_ID.fetch_add(1, Ordering::SeqCst).into();
-        // let test = self.functions.
         self.current_scope_mut().insert(name.clone(), Literal::Func(fxn_uid));
-        // println!("{}", fxn_uid);
         let mut fxn_clone = fxn.clone();
         let closure = self.clone();
         fxn_clone.closure = Some(closure);
-        // println!("before write lock");
         self.functions.write().unwrap().insert(fxn_uid, fxn_clone);
-        // println!("after write lock");
-        for frame in &self.stack {
-            for key in frame.keys() {
-                println!("{}", key);
-            }
-        }
-        println!("-----");
     }
 
     fn call_fxn_block(&mut self, args: &Vec<Literal>, fxn_aux: &mut Rc<FunStmtAux>) -> RuntimeValue {
