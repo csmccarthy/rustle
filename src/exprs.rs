@@ -41,6 +41,12 @@ pub struct Binary {
 	pub right: Box<dyn Expr>,
 }
 
+impl Binary {
+	pub fn boxed_new(left: Box<dyn Expr>, operator: Token, right: Box<dyn Expr>) -> Box<Binary> {
+		Box::new(Binary { left, operator, right })
+	}
+}
+
 impl Expr for Binary {}
 
 impl AssignmentTarget for Binary {
@@ -72,6 +78,12 @@ impl Callable for Binary {
 
 pub struct Grouping {
 	pub expression: Box<dyn Expr>,
+}
+
+impl Grouping {
+	pub fn boxed_new(expression: Box<dyn Expr>) -> Box<Grouping> {
+		Box::new(Grouping { expression })
+	}
 }
 
 impl Expr for Grouping {}
@@ -107,6 +119,12 @@ pub struct Literal {
 	pub value: LiteralValue,
 }
 
+impl Literal {
+	pub fn boxed_new(value: LiteralValue) -> Box<Literal> {
+		Box::new(Literal { value })
+	}
+}
+
 impl Expr for Literal {}
 
 impl AssignmentTarget for Literal {
@@ -139,6 +157,12 @@ impl Callable for Literal {
 pub struct Unary {
 	pub operator: Token,
 	pub right: Box<dyn Expr>,
+}
+
+impl Unary {
+	pub fn boxed_new(operator: Token, right: Box<dyn Expr>) -> Box<Unary> {
+		Box::new(Unary { operator, right })
+	}
 }
 
 impl Expr for Unary {}
@@ -176,6 +200,12 @@ pub struct Ternary {
 	pub expr_else: Box<dyn Expr>,
 }
 
+impl Ternary {
+	pub fn boxed_new(condition: Box<dyn Expr>, expr_if: Box<dyn Expr>, expr_else: Box<dyn Expr>) -> Box<Ternary> {
+		Box::new(Ternary { condition, expr_if, expr_else })
+	}
+}
+
 impl Expr for Ternary {}
 
 impl AssignmentTarget for Ternary {
@@ -210,6 +240,12 @@ pub struct Assign {
 	pub expression: Box<dyn Expr>,
 }
 
+impl Assign {
+	pub fn boxed_new(identifier: Token, expression: Box<dyn Expr>) -> Box<Assign> {
+		Box::new(Assign { identifier, expression })
+	}
+}
+
 impl Expr for Assign {}
 
 impl AssignmentTarget for Assign {
@@ -241,6 +277,12 @@ impl Callable for Assign {
 
 pub struct Variable {
 	pub identifier: Token,
+}
+
+impl Variable {
+	pub fn boxed_new(identifier: Token) -> Box<Variable> {
+		Box::new(Variable { identifier })
+	}
 }
 
 impl Expr for Variable {}
@@ -277,6 +319,12 @@ pub struct OrExpr { // TODO: probably merge with or
 	pub right: Box<dyn Expr>,
 }
 
+impl OrExpr {
+	pub fn boxed_new(left: Box<dyn Expr>, right: Box<dyn Expr>) -> Box<OrExpr> {
+		Box::new(OrExpr { left, right })
+	}
+}
+
 impl Expr for OrExpr {}
 
 impl AssignmentTarget for OrExpr {
@@ -311,6 +359,12 @@ pub struct AndExpr {
 	pub right: Box<dyn Expr>,
 }
 
+impl AndExpr {
+	pub fn boxed_new(left: Box<dyn Expr>, right: Box<dyn Expr>) -> Box<AndExpr> {
+		Box::new(AndExpr { left, right })
+	}
+}
+
 impl Expr for AndExpr {}
 
 impl AssignmentTarget for AndExpr {
@@ -343,6 +397,12 @@ impl Callable for AndExpr {
 pub struct Call {
 	pub identifier: Token,
 	pub args: Vec<Box<dyn Expr>>,
+}
+
+impl Call {
+	pub fn boxed_new(identifier: Token, args: Vec<Box<dyn Expr>>) -> Box<Call> {
+		Box::new(Call { identifier, args })
+	}
 }
 
 impl Expr for Call {}

@@ -41,6 +41,12 @@ pub struct ExprStmt {
 	pub expression: Box<dyn Expr>,
 }
 
+impl ExprStmt {
+	pub fn boxed_new(expression: Box<dyn Expr>) -> Box<ExprStmt> {
+		Box::new(ExprStmt { expression })
+	}
+}
+
 impl Stmt for ExprStmt {}
 
 impl Executable for ExprStmt {
@@ -60,6 +66,12 @@ impl FunctionDef for ExprStmt {
 
 pub struct Print {
     pub expression: Box<dyn Expr>,
+}
+
+impl Print {
+	pub fn boxed_new(expression: Box<dyn Expr>) -> Box<Print> {
+		Box::new(Print { expression })
+	}
 }
 
 impl Stmt for Print {}
@@ -84,6 +96,12 @@ pub struct VarStmt {
 	pub expression: Box<dyn Expr>,
 }
 
+impl VarStmt {
+	pub fn boxed_new(expression: Box<dyn Expr>, name: String) -> Box<VarStmt> {
+		Box::new(VarStmt { expression, name })
+	}
+}
+
 impl Stmt for VarStmt {}
 
 impl Executable for VarStmt {
@@ -103,6 +121,12 @@ impl FunctionDef for VarStmt {
 
 pub struct BlockStmt {
     pub stmts: Vec<Box<dyn Stmt>>,
+}
+
+impl BlockStmt {
+	pub fn boxed_new(stmts: Vec<Box<dyn Stmt>>) -> Box<BlockStmt> {
+		Box::new(BlockStmt { stmts })
+	}
 }
 
 impl Stmt for BlockStmt {}
@@ -128,6 +152,12 @@ pub struct IfStmt {
     pub stmt_else: Option<Box<dyn Stmt>>,
 }
 
+impl IfStmt {
+	pub fn boxed_new(condition: Box<dyn Expr>, stmt_if: Box<dyn Stmt>, stmt_else: Option<Box<dyn Stmt>>) -> Box<IfStmt> {
+		Box::new(IfStmt { condition, stmt_if, stmt_else })
+	}
+}
+
 impl Stmt for IfStmt {}
 
 impl Executable for IfStmt {
@@ -148,6 +178,12 @@ impl FunctionDef for IfStmt {
 pub struct WhileLoop {
     pub condition: Box<dyn Expr>,
     pub block: Box<dyn Stmt>,
+}
+
+impl WhileLoop {
+	pub fn boxed_new(condition: Box<dyn Expr>, block: Box<dyn Stmt>) -> Box<WhileLoop> {
+		Box::new(WhileLoop { condition, block })
+	}
 }
 
 impl Stmt for WhileLoop {}
@@ -172,6 +208,12 @@ pub struct ForLoop {
     pub condition: Box<dyn Expr>,
     pub incrementor: Box<dyn Expr>,
     pub block: Box<dyn Stmt>,
+}
+
+impl ForLoop {
+	pub fn boxed_new(init: Box<dyn Stmt>, condition: Box<dyn Expr>, incrementor: Box<dyn Expr>, block: Box<dyn Stmt>) -> Box<ForLoop> {
+		Box::new(ForLoop { init, condition, incrementor, block })
+	}
 }
 
 impl Stmt for ForLoop {}
@@ -208,7 +250,7 @@ impl FunStmt {
 		FunStmt { aux: Rc::new(FunStmtAux { name, params, block }), closure: None }
 	}
 
-	pub fn new_boxed(name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> Box<FunStmt> {
+	pub fn boxed_new(name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> Box<FunStmt> {
 		Box::new(FunStmt::new(name, params, block))
 	}
 }
@@ -240,6 +282,12 @@ impl FunctionDef for FunStmt {
 
 pub struct ReturnStmt {
     pub expression: Option<Box<dyn Expr>>,
+}
+
+impl ReturnStmt {
+	pub fn boxed_new(expression: Option<Box<dyn Expr>>) -> Box<ReturnStmt> {
+		Box::new(ReturnStmt { expression })
+	}
 }
 
 impl Stmt for ReturnStmt {}

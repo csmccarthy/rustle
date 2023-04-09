@@ -1,7 +1,6 @@
 var hehe = "global var";
 
 fun outer() {
-
     var closed = "closed";
 
     fun inner() {
@@ -18,8 +17,8 @@ fun callOther(arg) {
     arg();
 }
 
-var a = outer();
+outer()();
 //var b = a;
 //callOther(b);
 //outer()
-a();
+//b();
