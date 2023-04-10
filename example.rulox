@@ -4,5 +4,9 @@ fxn call_it(a, b) {
 }
 
 call_it(fxn (a) {
+    var unused;
+
     print a;
 }, "LAMBDAS WORKING");
+
+var a;

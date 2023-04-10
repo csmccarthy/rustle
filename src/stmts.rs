@@ -5,6 +5,7 @@ use crate::declarator::{ ASTDeclarator, RuntimeDeclaration };
 use crate::environment::Environment;
 use crate::exprs::{ Expr };
 use crate::scanner::Token;
+use crate::analyzer::{ ASTAnalyzer, Analyzed, SemanticResult };
 
 // use std::cell::{ RefCell };
 // use std::sync::Arc;
@@ -36,7 +37,7 @@ pub trait FunctionDef {
     fn function_def(&self) -> Option<FunStmt>;
 }
 
-pub trait Stmt: Executable+NeedsSemicolon {}
+pub trait Stmt: Executable+NeedsSemicolon+Analyzed {}
 
 
 pub struct ExprStmt {
@@ -63,6 +64,12 @@ impl NeedsSemicolon for ExprStmt {
 
 impl FunctionDef for ExprStmt {
 	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+impl Analyzed for ExprStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_expr(self)
+	}
 }
 
 
@@ -92,10 +99,16 @@ impl FunctionDef for Print {
 	fn function_def(&self) -> Option<FunStmt> { None }
 }
 
+impl Analyzed for Print {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_print(self)
+	}
+}
+
 
 pub struct VarStmt {
     pub name: String,
-	pub expression: Box<dyn Expr>,
+	pub expression: Box<dyn Expr>, // TODO: Change to option
 }
 
 impl VarStmt {
@@ -118,6 +131,12 @@ impl NeedsSemicolon for VarStmt {
 
 impl FunctionDef for VarStmt {
 	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+impl Analyzed for VarStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_var(self)
+	}
 }
 
 
@@ -145,6 +164,12 @@ impl NeedsSemicolon for BlockStmt {
 
 impl FunctionDef for BlockStmt {
 	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+impl Analyzed for BlockStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_block(self)
+	}
 }
 
 
@@ -176,6 +201,12 @@ impl FunctionDef for IfStmt {
 	fn function_def(&self) -> Option<FunStmt> { None }
 }
 
+impl Analyzed for IfStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_if(self)
+	}
+}
+
 
 pub struct WhileLoop {
     pub condition: Box<dyn Expr>,
@@ -202,6 +233,12 @@ impl NeedsSemicolon for WhileLoop {
 
 impl FunctionDef for WhileLoop {
 	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+impl Analyzed for WhileLoop {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_while(self)
+	}
 }
 
 
@@ -232,6 +269,12 @@ impl NeedsSemicolon for ForLoop {
 
 impl FunctionDef for ForLoop {
 	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+impl Analyzed for ForLoop {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_for(self)
+	}
 }
 
 // #[derive(Clone)]
@@ -277,7 +320,14 @@ impl NeedsSemicolon for FunStmt {
 
 impl FunctionDef for FunStmt {
 	fn function_def(&self) -> Option<FunStmt> {
+	
 		Some(self.clone())
+	}
+}
+
+impl Analyzed for FunStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_fxn(self)
 	}
 }
 
@@ -308,6 +358,12 @@ impl FunctionDef for ReturnStmt {
 	fn function_def(&self) -> Option<FunStmt> { None }
 }
 
+impl Analyzed for ReturnStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_return(self)
+	}
+}
+
 
 pub struct BreakStmt {}
 
@@ -333,6 +389,12 @@ impl FunctionDef for BreakStmt {
 	fn function_def(&self) -> Option<FunStmt> { None }
 }
 
+impl Analyzed for BreakStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_break(self)
+	}
+}
+
 
 pub struct ContinueStmt {}
 
@@ -356,4 +418,10 @@ impl NeedsSemicolon for ContinueStmt {
 
 impl FunctionDef for ContinueStmt {
 	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+impl Analyzed for ContinueStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_continue(self)
+	}
 }

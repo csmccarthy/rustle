@@ -9,6 +9,7 @@ mod evaluator;
 mod stmts;
 mod declarator;
 mod environment;
+mod analyzer;
 
 
 use scanner::{ Scanner };
@@ -19,6 +20,7 @@ use declarator::{ ASTDeclarator };
 use parser::{ Parser, SyntaxError };
 use stmts::{ Stmt };
 use environment::{ Environment };
+use analyzer::{ ASTAnalyzer };
 
 use std::fs::File;
 use std::path::Path;
@@ -42,23 +44,25 @@ fn run(line: String) { // Should use bytes instead of String
             eprintln!("{}", err);
         }
     }
-    // println!("\nStatements:");
-    let stmts_ref: &Vec<Box<dyn Stmt>> = &parser.stmts;
-    {
-        let mut env = Environment::new();
-        let mut decl = ASTDeclarator::new(&mut env);
-        for stmt in stmts_ref {
-            // print!("{} →  ", stmt);
-            if io::stdout().flush().is_err() { eprintln!("Issue flushing statement to stdout") };
-            let stmt: &Box<dyn Stmt> = stmt;
-            let res = stmt.execute(&mut decl);
-            match res {
-                Err(e) => eprintln!("Runtime Error: {:?}", e),
-                // Ok(val) => println!("{}", "Run successfully"),
-                _ => ()
-            }
-        }
+    
+    let mut analyzer = ASTAnalyzer::new();
+    for stmt in &parser.stmts {
+        println!("{:?}", stmt.accept(&mut analyzer));
     }
+
+    // let mut env = Environment::new();
+    // let mut decl = ASTDeclarator::new(&mut env);
+    // for stmt in &parser.stmts {
+    //     // print!("{} →  ", stmt);
+    //     if io::stdout().flush().is_err() { eprintln!("Issue flushing statement to stdout") };
+    //     let stmt: &Box<dyn Stmt> = stmt;
+    //     let res = stmt.execute(&mut decl);
+    //     match res {
+    //         Err(e) => eprintln!("Runtime Error: {:?}", e),
+    //         // Ok(val) => println!("{}", "Run successfully"),
+    //         _ => ()
+    //     }
+    // }
     // parser;
 }
 

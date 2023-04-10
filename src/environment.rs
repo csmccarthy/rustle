@@ -17,6 +17,7 @@ pub struct Environment {
     stack: Vec<HashMap<String, Literal>>,
     functions: Rc<RwLock<HashMap<usize, FunStmt>>>,
     lambdas: Rc<RwLock<HashMap<usize, Lambda>>>,
+    // locals: HashMap<
 }
 
 

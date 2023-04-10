@@ -1,10 +1,14 @@
 use crate::scanner::{ Token, Literal as LiteralValue };
 use crate::evaluator::{ ASTEvaluator, RuntimeValue };
-// use crate::declarator::{ ASTDeclarator, RuntimeDeclaration };
+// use crate::declarator::{ RuntimeDeclaration };
 use crate::stmts::{ Stmt, FunStmt };
-// use crate::environment::Environment;
+use crate::analyzer::{ ASTAnalyzer, Analyzed, SemanticResult };
+// use crate::stmts::StmtVisitor;
 use std::fmt::Display;
 // use std::rc::{ Rc };
+// use std::hash::{ Hash, Hasher };
+
+
 
 pub trait ExprVisitor<'parser, R> {
 	fn visit_binary<'evaluator>(&'evaluator mut self, expr: &'parser Binary) -> R;
@@ -31,7 +35,7 @@ pub trait AssignmentTarget {
 	fn assignment_target(&self) -> Option<Token>;
 }
 
-pub trait Expr: Display+Evaluable+AssignmentTarget {}
+pub trait Expr: Display+Evaluable+AssignmentTarget+Analyzed {}
 
 
 pub struct Binary {
@@ -47,6 +51,12 @@ impl Binary {
 }
 
 impl Expr for Binary {}
+
+impl Analyzed for Binary {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_binary(self)
+	}
+}
 
 impl AssignmentTarget for Binary {
 	fn assignment_target(&self) -> Option<Token> { None }
@@ -77,6 +87,12 @@ impl Grouping {
 
 impl Expr for Grouping {}
 
+impl Analyzed for Grouping {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_grouping(self)
+	}
+}
+
 impl AssignmentTarget for Grouping {
 	fn assignment_target(&self) -> Option<Token> { None }
 }
@@ -105,6 +121,12 @@ impl Literal {
 }
 
 impl Expr for Literal {}
+
+impl Analyzed for Literal {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_literal(self)
+	}
+}
 
 impl AssignmentTarget for Literal {
 	fn assignment_target(&self) -> Option<Token> { None }
@@ -135,6 +157,12 @@ impl Unary {
 }
 
 impl Expr for Unary {}
+
+impl Analyzed for Unary {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_unary(self)
+	}
+}
 
 impl AssignmentTarget for Unary {
 	fn assignment_target(&self) -> Option<Token> { None }
@@ -167,6 +195,12 @@ impl Ternary {
 
 impl Expr for Ternary {}
 
+impl Analyzed for Ternary {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_ternary(self)
+	}
+}
+
 impl AssignmentTarget for Ternary {
 	fn assignment_target(&self) -> Option<Token> { None }
 }
@@ -197,6 +231,12 @@ impl Assign {
 
 impl Expr for Assign {}
 
+impl Analyzed for Assign {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_assign(self)
+	}
+}
+
 impl AssignmentTarget for Assign {
 	fn assignment_target(&self) -> Option<Token> { None }
 }
@@ -225,6 +265,12 @@ impl Variable {
 }
 
 impl Expr for Variable {}
+
+impl Analyzed for Variable {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_variable(self)
+	}
+}
 
 impl AssignmentTarget for Variable {
 	fn assignment_target(&self) -> Option<Token> { Some(self.identifier.clone()) }
@@ -256,6 +302,12 @@ impl OrExpr {
 
 impl Expr for OrExpr {}
 
+impl Analyzed for OrExpr {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_or(self)
+	}
+}
+
 impl AssignmentTarget for OrExpr {
 	fn assignment_target(&self) -> Option<Token> { None }
 }
@@ -285,6 +337,12 @@ impl AndExpr {
 }
 
 impl Expr for AndExpr {}
+
+impl Analyzed for AndExpr {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_and(self)
+	}
+}
 
 impl AssignmentTarget for AndExpr {
 	fn assignment_target(&self) -> Option<Token> { None }
@@ -316,6 +374,12 @@ impl Call {
 
 impl Expr for Call {}
 
+impl Analyzed for Call {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_call(self)
+	}
+}
+
 impl AssignmentTarget for Call {
 	fn assignment_target(&self) -> Option<Token> { None }
 }
@@ -346,7 +410,7 @@ impl Lambda {
 			token_type: crate::scanner::Tokens::Identifier,
 			literal: LiteralValue::Str(String::from("lambda")),
 			lexeme: String::from("lambda"),
-			line: 0
+			line: 0 // TODO: Fix this to use an actual token
 		};
 		let stmt = FunStmt::new(token, params, block);
 		Box::new(Lambda { stmt })
@@ -355,6 +419,12 @@ impl Lambda {
 
 
 impl Expr for Lambda {}
+
+impl Analyzed for Lambda {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_lambda(self)
+	}
+}
 
 impl Clone for Lambda {
 	fn clone(&self) -> Self {
