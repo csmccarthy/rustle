@@ -223,7 +223,7 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
 
 	fn visit_lambda(&mut self, expr: &'parser Lambda) -> RuntimeValue {
 		// let fxn = expr.clone();
-        let fxn_uid = self.stack.store_lambda(expr);
+        let fxn_uid = self.stack.store_fxn(&expr.stmt);
         Ok(LiteralValue::Func(fxn_uid))
 	}
 }

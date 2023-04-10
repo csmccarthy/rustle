@@ -37,7 +37,7 @@ pub enum Tokens {
     String,
 
     // Keywords
-    And, Class, Else, False, Fun,
+    And, Class, Else, False, Fxn,
     For, If, Nil, Or, Print, Return,
     Super, This, True, Var, While,
     Break, Continue,
@@ -51,7 +51,7 @@ lazy_static! {
         (String::from("class"), Tokens::Class),
         (String::from("else"), Tokens::Else),
         (String::from("false"), Tokens::False),
-        (String::from("fun"), Tokens::Fun),
+        (String::from("fxn"), Tokens::Fxn),
         (String::from("for"), Tokens::For),
         (String::from("if"), Tokens::If),
         (String::from("nil"), Tokens::Nil),
@@ -283,8 +283,9 @@ impl Scanner {
                     self.add_token_literal(Tokens::Number, 0, 0);
                 },
                 // Match an identifier or a reserved keyword
-                'A'..='Z' | 'a'..='z' => {
+                'A'..='Z' | 'a'..='z' | '_' => {
                     while let Some(_) = self.advance_if_fxn(|char| {
+                        if char == &'_' { return true }
                         if CAPS.contains(char) { return true }
                         if LOWERS.contains(char) { return true }
                         NUMS.contains(char)

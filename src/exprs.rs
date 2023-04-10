@@ -1,10 +1,10 @@
 use crate::scanner::{ Token, Literal as LiteralValue };
 use crate::evaluator::{ ASTEvaluator, RuntimeValue };
 // use crate::declarator::{ ASTDeclarator, RuntimeDeclaration };
-use crate::stmts::{ Stmt };
-use crate::environment::Environment;
+use crate::stmts::{ Stmt, FunStmt };
+// use crate::environment::Environment;
 use std::fmt::Display;
-use std::rc::{ Rc };
+// use std::rc::{ Rc };
 
 pub trait ExprVisitor<'parser, R> {
 	fn visit_binary<'evaluator>(&'evaluator mut self, expr: &'parser Binary) -> R;
@@ -336,25 +336,20 @@ impl Display for Call {
     }
 }
 
-
-pub struct LambdaAux {
-    pub params: Vec<Token>,
-    pub block: Box<dyn Stmt>,
-}
-
-
 pub struct Lambda {
-	pub aux: Rc<LambdaAux>,
-	pub closure: Option<Environment>,
+	pub stmt: FunStmt
 }
 
 impl Lambda {
-	pub fn new(params: Vec<Token>, block: Box<dyn Stmt>) -> Lambda {
-		Lambda { aux: Rc::new(LambdaAux { params, block }), closure: None }
-	}
-
 	pub fn boxed_new(params: Vec<Token>, block: Box<dyn Stmt>) -> Box<Lambda> {
-		Box::new(Lambda::new(params, block))
+		let token = Token {
+			token_type: crate::scanner::Tokens::Identifier,
+			literal: LiteralValue::Str(String::from("lambda")),
+			lexeme: String::from("lambda"),
+			line: 0
+		};
+		let stmt = FunStmt::new(token, params, block);
+		Box::new(Lambda { stmt })
 	}
 }
 
@@ -363,7 +358,7 @@ impl Expr for Lambda {}
 
 impl Clone for Lambda {
 	fn clone(&self) -> Self {
-		Lambda { aux: self.aux.clone(), closure: self.closure.clone() }
+		Lambda { stmt: self.stmt.clone() }
 	}
 }
 
@@ -380,7 +375,7 @@ impl Evaluable for Lambda {
 impl Display for Lambda {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "lmbda (")?;
-		for expr in &self.aux.params {
+		for expr in &self.stmt.aux.params {
 			write!(f, "{}", expr)?;
 		}
 		write!(f, ")")

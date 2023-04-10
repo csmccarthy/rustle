@@ -91,7 +91,7 @@ impl Parser {
 
     fn declaration(&mut self) -> ParseResult<Box<dyn Stmt>> {
         if self.match_token(Tokens::Var) { return Ok(self.var_decl()?) }
-        if self.match_token(Tokens::Fun) { return Ok(self.fun_decl()?) }
+        if self.match_token(Tokens::Fxn) { return Ok(self.fun_decl()?) }
         self.stmt()
     }
 
@@ -275,7 +275,7 @@ impl Parser {
     }
 
     fn lambda(&mut self) -> ParseResult<Box<dyn Expr>> {
-        if self.match_token(Tokens::Fun) {
+        if self.match_token(Tokens::Fxn) {
             // let name = self.extract_name()?;
             if !self.match_token(Tokens::LeftParenthesis) {
                 return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()))
@@ -441,7 +441,7 @@ impl Parser {
             if tk.token_type == Tokens::Semicolon { return }
             match tk.token_type {
                 Tokens::Class
-                    | Tokens::Fun
+                    | Tokens::Fxn
                     | Tokens::Var
                     | Tokens::For
                     | Tokens::If
