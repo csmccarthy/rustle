@@ -1,5 +1,6 @@
 use crate::declarator::ASTDeclarator;
 use crate::evaluator::{ RuntimeError, RuntimeResult, RuntimeValue };
+use crate::exprs::Lambda;
 use crate::scanner::Literal;
 use crate::stmts::{ FunStmt, FunStmtAux };
 
@@ -9,10 +10,13 @@ use std::sync::{ RwLock };
 use std::rc::Rc;
 
 static GLOBAL_FXN_ID: AtomicUsize = AtomicUsize::new(0);
+pub static GLOBAL_LMBDA_ID: AtomicUsize = AtomicUsize::new(0);
+
 
 pub struct Environment {
     stack: Vec<HashMap<String, Literal>>,
     functions: Rc<RwLock<HashMap<usize, FunStmt>>>,
+    lambdas: Rc<RwLock<HashMap<usize, Lambda>>>,
 }
 
 
@@ -22,7 +26,11 @@ impl Environment {
         let global = HashMap::new();
         let mut stack = Vec::new();
         stack.push(global);
-        Environment { stack, functions: Rc::new(RwLock::new(HashMap::new())) }
+        Environment {
+            stack,
+            functions: Rc::new(RwLock::new(HashMap::new())),
+            lambdas: Rc::new(RwLock::new(HashMap::new()))
+        }
     }
 
     pub fn define(&mut self, name: String, expr: Literal) -> RuntimeResult<()> {
@@ -89,6 +97,19 @@ impl Environment {
         self.functions.write().unwrap().insert(fxn_uid, fxn_clone);
     }
 
+    pub fn store_lambda(&mut self, fxn: &Lambda) -> usize {
+        // let name = &fxn.aux.name.lexeme;
+        let fxn_uid: usize = GLOBAL_LMBDA_ID.fetch_add(1, Ordering::SeqCst).into();
+		let literal_name = format!("lambda {}", fxn_uid);
+        // let fxn_uid: usize = GLOBAL_FXN_ID.fetch_add(1, Ordering::SeqCst).into();
+        self.current_scope_mut().insert(literal_name, Literal::Func(fxn_uid));
+        let mut fxn_clone = fxn.clone();
+        let closure = self.clone();
+        fxn_clone.closure = Some(closure);
+        self.lambdas.write().unwrap().insert(fxn_uid, fxn_clone);
+        fxn_uid
+    }
+
     fn call_fxn_block(&mut self, args: &Vec<Literal>, fxn_aux: &mut Rc<FunStmtAux>) -> RuntimeValue {
         self.nest(); // This nest creates a new stack frame for function arguments
         for arg_item in args.iter().zip(&fxn_aux.params) {
@@ -140,10 +161,15 @@ impl Environment {
         }
         
     }
+    
 }
 
 impl Clone for Environment {
     fn clone(&self) -> Self {
-        Environment { stack: self.stack.clone(), functions: self.functions.clone() }
+        Environment {
+            stack: self.stack.clone(),
+            functions: self.functions.clone(),
+            lambdas: self.lambdas.clone(),
+        }
     }
 }

@@ -1,5 +1,5 @@
 use crate::scanner::Literal;
-use crate::stmts::{ StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt };
+use crate::stmts::{ StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt };
 // use crate::exprs::{ Expr };
 // use crate::scanner::{ Literal };
 use crate::environment::{ Environment };
@@ -71,7 +71,13 @@ impl<'parser> StmtVisitor<'parser, RuntimeDeclaration> for ASTDeclarator<'parser
         if !matches!(val, Literal::Bool(_)) { return Err(RuntimeError::InvalidConditional(val.clone())) }
         while let Literal::Bool(b) = val {
             if !b { break; }
-            stmt.block.execute(self)?;
+            if let Err(e) = stmt.block.execute(self) {
+                match e {
+                    RuntimeError::Break => break,
+                    RuntimeError::Continue => (), // TODO investigate if condition is checked
+                    err => return Err(err)
+                }
+            }
             let mut eval = ASTEvaluator::new(self.stack);
             val = stmt.condition.evaluate(&mut eval)?;
             if !matches!(val, Literal::Bool(_)) { return Err(RuntimeError::InvalidConditional(val.clone())) }
@@ -86,7 +92,13 @@ impl<'parser> StmtVisitor<'parser, RuntimeDeclaration> for ASTDeclarator<'parser
         if !matches!(val, Literal::Bool(_)) { return Err(RuntimeError::InvalidConditional(val.clone())) }
         while let Literal::Bool(b) = val {
             if !b { break; }
-            stmt.block.execute(self)?;
+            if let Err(e) = stmt.block.execute(self) {
+                match e {
+                    RuntimeError::Break => break,
+                    RuntimeError::Continue => (), // TODO investigate if the incrementor still needs to run
+                    err => return Err(err)
+                }
+            }
             let mut eval = ASTEvaluator::new(self.stack);
             stmt.incrementor.evaluate(&mut eval)?;
             val = stmt.condition.evaluate(&mut eval)?;
@@ -109,5 +121,13 @@ impl<'parser> StmtVisitor<'parser, RuntimeDeclaration> for ASTDeclarator<'parser
                 Err(RuntimeError::Return(val))
             }
         }
+    }
+
+	fn visit_break(&mut self, _stmt: &'parser BreakStmt) -> RuntimeDeclaration {
+        Err(RuntimeError::Break)
+    }
+
+	fn visit_continue(&mut self, _stmt: &'parser ContinueStmt) -> RuntimeDeclaration {
+        Err(RuntimeError::Continue)
     }
 }

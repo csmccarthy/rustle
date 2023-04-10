@@ -1,9 +1,13 @@
 
 
 use crate::scanner::{ Tokens, Literal as LiteralValue };
-use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call/*, Callable*/ };
+use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda };
 // use std::collections::HashMap;
 use crate::environment::{ Environment };
+// use crate::stmts::{ FunStmt };
+
+// use std::sync::atomic::{ Ordering };
+
 
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -17,6 +21,8 @@ pub enum RuntimeError {
 	InvalidCallable(LiteralValue),
 	MismatchedArguments(usize, usize),
 	Return(LiteralValue),
+	Break,
+	Continue,
 }
 
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
@@ -213,5 +219,11 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
             literal_args.push(arg.evaluate(self)?);
         }
         self.stack.call_fxn(&expr.identifier.lexeme, &literal_args)
+	}
+
+	fn visit_lambda(&mut self, expr: &'parser Lambda) -> RuntimeValue {
+		// let fxn = expr.clone();
+        let fxn_uid = self.stack.store_lambda(expr);
+        Ok(LiteralValue::Func(fxn_uid))
 	}
 }

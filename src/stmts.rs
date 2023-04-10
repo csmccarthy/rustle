@@ -20,6 +20,8 @@ pub trait StmtVisitor<'parser, R> {
 	fn visit_for(&mut self, expr: &'parser ForLoop) -> R;
 	fn visit_fxn(&mut self, expr: &'parser FunStmt) -> R;
 	fn visit_return(&mut self, expr: &'parser ReturnStmt) -> R;
+	fn visit_break(&mut self, expr: &'parser BreakStmt) -> R;
+	fn visit_continue(&mut self, expr: &'parser ContinueStmt) -> R;
 }
 
 pub trait Executable {
@@ -306,3 +308,52 @@ impl FunctionDef for ReturnStmt {
 	fn function_def(&self) -> Option<FunStmt> { None }
 }
 
+
+pub struct BreakStmt {}
+
+impl BreakStmt {
+	pub fn boxed_new() -> Box<BreakStmt> {
+		Box::new(BreakStmt {})
+	}
+}
+
+impl Stmt for BreakStmt {}
+
+impl Executable for BreakStmt {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_break(self)
+	}
+}
+
+impl NeedsSemicolon for BreakStmt {
+	fn needs_semicolon(&self) -> bool { true }
+}
+
+impl FunctionDef for BreakStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+
+pub struct ContinueStmt {}
+
+impl ContinueStmt {
+	pub fn boxed_new() -> Box<ContinueStmt> {
+		Box::new(ContinueStmt {})
+	}
+}
+
+impl Stmt for ContinueStmt {}
+
+impl Executable for ContinueStmt {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_continue(self)
+	}
+}
+
+impl NeedsSemicolon for ContinueStmt {
+	fn needs_semicolon(&self) -> bool { true }
+}
+
+impl FunctionDef for ContinueStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
+}

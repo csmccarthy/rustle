@@ -1,6 +1,10 @@
 use crate::scanner::{ Token, Literal as LiteralValue };
-use std::fmt::Display;
 use crate::evaluator::{ ASTEvaluator, RuntimeValue };
+// use crate::declarator::{ ASTDeclarator, RuntimeDeclaration };
+use crate::stmts::{ Stmt };
+use crate::environment::Environment;
+use std::fmt::Display;
+use std::rc::{ Rc };
 
 pub trait ExprVisitor<'parser, R> {
 	fn visit_binary<'evaluator>(&'evaluator mut self, expr: &'parser Binary) -> R;
@@ -13,6 +17,7 @@ pub trait ExprVisitor<'parser, R> {
 	fn visit_or<'evaluator>(&'evaluator mut self, expr: &'parser OrExpr) -> R;
 	fn visit_and<'evaluator>(&'evaluator mut self, expr: &'parser AndExpr) -> R;
 	fn visit_call<'evaluator>(&'evaluator mut self, expr: &'parser Call) -> R;
+	fn visit_lambda<'evaluator>(&'evaluator mut self, expr: &'parser Lambda) -> R;
 }
 
 pub trait Evaluable {
@@ -26,13 +31,7 @@ pub trait AssignmentTarget {
 	fn assignment_target(&self) -> Option<Token>;
 }
 
-pub trait Callable {
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>;
-}
-
-pub trait Expr: Display+Evaluable+AssignmentTarget+Callable {}
+pub trait Expr: Display+Evaluable+AssignmentTarget {}
 
 
 pub struct Binary {
@@ -65,16 +64,6 @@ impl Display for Binary {
     }
 }
 
-impl Callable for Binary {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
-    }
-}
-
 
 pub struct Grouping {
 	pub expression: Box<dyn Expr>,
@@ -101,16 +90,6 @@ impl Evaluable for Grouping {
 impl Display for Grouping {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({})", self.expression)
-    }
-}
-
-impl Callable for Grouping {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
     }
 }
 
@@ -143,16 +122,6 @@ impl Display for Literal {
     }
 }
 
-impl Callable for Literal {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
-    }
-}
-
 
 pub struct Unary {
 	pub operator: Token,
@@ -180,16 +149,6 @@ impl Evaluable for Unary {
 impl Display for Unary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} {})", self.operator.lexeme, self.right)
-    }
-}
-
-impl Callable for Unary {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
     }
 }
 
@@ -224,16 +183,6 @@ impl Display for Ternary {
     }
 }
 
-impl Callable for Ternary {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
-    }
-}
-
 
 pub struct Assign {
 	pub identifier: Token,
@@ -264,16 +213,6 @@ impl Display for Assign {
     }
 }
 
-impl Callable for Assign {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
-    }
-}
-
 
 pub struct Variable {
 	pub identifier: Token,
@@ -300,16 +239,6 @@ impl Evaluable for Variable {
 impl Display for Variable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "var {}", self.identifier.lexeme)
-    }
-}
-
-impl Callable for Variable {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
     }
 }
 
@@ -343,16 +272,6 @@ impl Display for OrExpr {
     }
 }
 
-impl Callable for OrExpr {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
-    }
-}
-
 
 pub struct AndExpr {
 	pub left: Box<dyn Expr>,
@@ -380,16 +299,6 @@ impl Evaluable for AndExpr {
 impl Display for AndExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "({} {})", self.left, self.right)
-    }
-}
-
-impl Callable for AndExpr {
-    
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		None
     }
 }
 
@@ -427,23 +336,53 @@ impl Display for Call {
     }
 }
 
-impl Callable for Call {
-    fn callable(
-		&self,
-	) -> Option<Box<dyn Fn() -> RuntimeValue>>
-	{
-		// self.expression.eval
-		// self.identifier.lexeme
-		Some(Box::new(
-			|| {
-				println!("calling fxn");
-				// let mut literal_args = Vec::new();
-				// for arg in &self.args {
-				// 	literal_args.push(arg.evaluate(visitor)?);
-				// }
-				// let signature = self.expression.evaluate(visitor)?;
-				Ok(LiteralValue::Nil)
-			}
-		))
+
+pub struct LambdaAux {
+    pub params: Vec<Token>,
+    pub block: Box<dyn Stmt>,
+}
+
+
+pub struct Lambda {
+	pub aux: Rc<LambdaAux>,
+	pub closure: Option<Environment>,
+}
+
+impl Lambda {
+	pub fn new(params: Vec<Token>, block: Box<dyn Stmt>) -> Lambda {
+		Lambda { aux: Rc::new(LambdaAux { params, block }), closure: None }
+	}
+
+	pub fn boxed_new(params: Vec<Token>, block: Box<dyn Stmt>) -> Box<Lambda> {
+		Box::new(Lambda::new(params, block))
+	}
+}
+
+
+impl Expr for Lambda {}
+
+impl Clone for Lambda {
+	fn clone(&self) -> Self {
+		Lambda { aux: self.aux.clone(), closure: self.closure.clone() }
+	}
+}
+
+impl AssignmentTarget for Lambda {
+	fn assignment_target(&self) -> Option<Token> { None }
+}
+
+impl Evaluable for Lambda {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+		visitor.visit_lambda(self)
+	}
+}
+
+impl Display for Lambda {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "lmbda (")?;
+		for expr in &self.aux.params {
+			write!(f, "{}", expr)?;
+		}
+		write!(f, ")")
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call };
-use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt };
+use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda };
+use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt };
 use crate::scanner::{ Token, Tokens, Literal as LiteralValue };
 
 pub struct Parser {
@@ -102,6 +102,8 @@ impl Parser {
         else if self.match_token(Tokens::While) { return Ok(self.while_loop()?) }
         else if self.match_token(Tokens::For) { return Ok(self.for_loop()?) }
         else if self.match_token(Tokens::Return) { return Ok(self.return_stmt()?) }
+        else if self.match_token(Tokens::Break) { return Ok(BreakStmt::boxed_new()) } // TODO: Handle outside of loop
+        else if self.match_token(Tokens::Continue) { return Ok(ContinueStmt::boxed_new()) } // TODO: Handle outside of loop
         self.expression_stmt()
     }
 
@@ -260,9 +262,9 @@ impl Parser {
     }
 
     fn ternary(&mut self) -> ParseResult<Box<dyn Expr>> {
-        let mut expr = self.logic_or()?;
+        let mut expr = self.lambda()?;
         while self.match_token(Tokens::Question) {
-            let expr_if = self.logic_or()?;
+            let expr_if = self.lambda()?;
             if !self.consume(Tokens::Colon) {
                 return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()));
             }
@@ -270,6 +272,37 @@ impl Parser {
             expr = Ternary::boxed_new(expr, expr_if, carried_else);
         }
         Ok(expr)
+    }
+
+    fn lambda(&mut self) -> ParseResult<Box<dyn Expr>> {
+        if self.match_token(Tokens::Fun) {
+            // let name = self.extract_name()?;
+            if !self.match_token(Tokens::LeftParenthesis) {
+                return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()))
+            }
+            let mut params = Vec::new();
+            if self.match_token(Tokens::RightParenthesis) {
+                if !self.match_token(Tokens::LeftBrace) {
+                    return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+                }
+                let block = self.block()?;
+                return Ok(Lambda::boxed_new(params, block));
+            } else {
+                params.push(self.extract_name()?);
+                while self.match_token(Tokens::Comma) {
+                    params.push(self.extract_name()?);
+                }
+                if !self.match_token(Tokens::RightParenthesis) {
+                    return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()));
+                }
+                if !self.match_token(Tokens::LeftBrace) {
+                    return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+                }
+                let block = self.block()?;
+                return Ok(Lambda::boxed_new(params, block));
+            }
+        }
+        Ok(self.logic_or()?)
     }
 
     fn logic_or(&mut self) -> ParseResult<Box<dyn Expr>> {
@@ -335,11 +368,11 @@ impl Parser {
             },
             _ => None
         };
-        println!("{:?}", identifier);
+        // println!("{:?}", identifier);
         if let Some(tk) = identifier {
             loop {
                 if self.match_token(Tokens::LeftParenthesis) {
-                    println!("making fxn call");
+                    // println!("making fxn call");
                     let mut args = Vec::new();
                     if self.match_token(Tokens::RightParenthesis) {
                         return Ok(Call::boxed_new(tk, args));
@@ -384,7 +417,7 @@ impl Parser {
             return Ok(Variable::boxed_new(self.previous().unwrap().clone()));
         }
         else if self.match_token(Tokens::EOF) {
-            println!("here");
+            // println!("here");
             return Err(SyntaxError::EOFReached);
         }
         Err(SyntaxError::ExpectedLiteral(self.peek().unwrap().line, Vec::new()))
@@ -452,7 +485,7 @@ impl Parser {
             && self.ignore_comments()
             && self.peek().unwrap().token_type != Tokens::EOF
         {
-            println!("{:?}", self.peek().unwrap().token_type);
+            // println!("{:?}", self.peek().unwrap().token_type);
             let stmt_res = self.declaration();
             if let Err(mut e) = stmt_res {
                 self.sync(&mut e);

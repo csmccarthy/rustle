@@ -40,6 +40,7 @@ pub enum Tokens {
     And, Class, Else, False, Fun,
     For, If, Nil, Or, Print, Return,
     Super, This, True, Var, While,
+    Break, Continue,
 
     EOF
 }
@@ -62,6 +63,8 @@ lazy_static! {
         (String::from("true"), Tokens::True),
         (String::from("var"), Tokens::Var),
         (String::from("while"), Tokens::While),
+        (String::from("break"), Tokens::Break),
+        (String::from("continue"), Tokens::Continue),
     ]);
 }
 

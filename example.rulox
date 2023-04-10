@@ -1,24 +1,14 @@
-var hehe = "global var";
 
-fun outer() {
-    var closed = "closed";
 
-    fun inner() {
-        print "inner";
-        print closed;
-        print hehe;
-        return "a";
-    }
-    inner();
-    return inner;
+var a = 1;
+var b = 1;
+print 1;
+print 1;
+for var i = 0; i < 10; i = i + 1 {
+    var temp = a + b;
+    a = b;
+    b = temp;
+    if i == 8 { continue; }
+    print b;
 }
-
-fun callOther(arg) {
-    arg();
-}
-
-outer()();
-//var b = a;
-//callOther(b);
-//outer()
-//b();
+//print b;
