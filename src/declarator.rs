@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
+// use crate::exprs::{Instantiation, Variable, Call};
 use crate::scanner::Literal;
-use crate::stmts::{ StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt };
+use crate::stmts::{ Stmt, StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt, ClassStmt, InstantiationStmt };
 // use crate::exprs::{ Expr };
 // use crate::scanner::{ Literal };
-use crate::environment::{ Environment };
+use crate::environment::{ Environment, PropertyStore };
 use crate::evaluator::{ ASTEvaluator, RuntimeResult, RuntimeError };
 // use std::collections::HashMap;
 
@@ -35,13 +38,12 @@ impl<'parser> StmtVisitor<'parser, RuntimeDeclaration> for ASTDeclarator<'parser
 	fn visit_var(&mut self, stmt: &'parser VarStmt) -> RuntimeDeclaration {
         let mut eval = ASTEvaluator::new(self.stack);
         let val = stmt.expression.evaluate(&mut eval)?;
-        self.stack.define(stmt.name.clone(), val)?;
+        self.stack.define(stmt.name.lexeme.clone(), val)?;
         Ok(())
     }
 
 	fn visit_block(&mut self, stmt: &'parser BlockStmt) -> RuntimeDeclaration {
         self.stack.nest();
-        // println!("block nest");
         for st in &stmt.stmts {
             match st.execute(self) {
                 Ok(_) => (),
@@ -129,5 +131,38 @@ impl<'parser> StmtVisitor<'parser, RuntimeDeclaration> for ASTDeclarator<'parser
 
 	fn visit_continue(&mut self, _stmt: &'parser ContinueStmt) -> RuntimeDeclaration {
         Err(RuntimeError::Continue)
+    }
+
+	fn visit_class(&mut self, stmt: &'parser ClassStmt) -> RuntimeDeclaration {
+        let mut prop_map: PropertyStore = HashMap::new();
+        for method in &stmt.methods {
+            let idx = self.stack.store_fxn(method);
+            prop_map.insert(method.aux.name.lexeme.clone(), Literal::Func(idx, None));
+        }
+        let mut stmts: Vec<Box<dyn Stmt>> = Vec::new();
+
+        let mut params = Vec::new();
+        if let Some(init) = &prop_map.get("init") {
+            let init_params = match init {
+                Literal::Func(fxn_uid, _) => {
+                    self.stack.get_params(fxn_uid)?
+                }
+                _ => { return Ok(()); },
+            };
+            params = init_params;
+        }
+        let constructor_stmt = InstantiationStmt::boxed_new(stmt.name.clone(), prop_map);
+        stmts.push(constructor_stmt);
+
+        let block = BlockStmt::boxed_new(stmts);
+        let constructor_fxn = FunStmt::new(stmt.name.clone(), params, block);
+        self.stack.store_fxn(&constructor_fxn);
+        Ok(())
+    }
+
+	fn visit_instantiation(&mut self, stmt: &'parser InstantiationStmt) -> RuntimeDeclaration {
+        let uid = self.stack.instantiate(stmt)?;
+        let instance = Literal::Instance(stmt.name.lexeme.clone(), uid);
+        Err(RuntimeError::Return(instance))
     }
 }

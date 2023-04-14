@@ -2,7 +2,7 @@
 
 // use crate::evaluator::{ RuntimeValue };
 use crate::declarator::{ ASTDeclarator, RuntimeDeclaration };
-use crate::environment::Environment;
+use crate::environment::{Environment, PropertyStore};
 use crate::exprs::{ Expr };
 use crate::scanner::Token;
 use crate::analyzer::{ ASTAnalyzer, Analyzed, SemanticResult };
@@ -12,17 +12,19 @@ use crate::analyzer::{ ASTAnalyzer, Analyzed, SemanticResult };
 use std::rc::{ Rc };
 
 pub trait StmtVisitor<'parser, R> {
-	fn visit_expr(&mut self, expr: &'parser ExprStmt) -> R;
-	fn visit_print(&mut self, expr: &'parser Print) -> R;
-	fn visit_var(&mut self, expr: &'parser VarStmt) -> R;
-	fn visit_block(&mut self, expr: &'parser BlockStmt) -> R;
-	fn visit_if(&mut self, expr: &'parser IfStmt) -> R;
-	fn visit_while(&mut self, expr: &'parser WhileLoop) -> R;
-	fn visit_for(&mut self, expr: &'parser ForLoop) -> R;
-	fn visit_fxn(&mut self, expr: &'parser FunStmt) -> R;
-	fn visit_return(&mut self, expr: &'parser ReturnStmt) -> R;
-	fn visit_break(&mut self, expr: &'parser BreakStmt) -> R;
-	fn visit_continue(&mut self, expr: &'parser ContinueStmt) -> R;
+	fn visit_expr(&mut self, stmt: &'parser ExprStmt) -> R;
+	fn visit_print(&mut self, stmt: &'parser Print) -> R;
+	fn visit_var(&mut self, stmt: &'parser VarStmt) -> R;
+	fn visit_block(&mut self, stmt: &'parser BlockStmt) -> R;
+	fn visit_if(&mut self, stmt: &'parser IfStmt) -> R;
+	fn visit_while(&mut self, stmt: &'parser WhileLoop) -> R;
+	fn visit_for(&mut self, stmt: &'parser ForLoop) -> R;
+	fn visit_fxn(&mut self, stmt: &'parser FunStmt) -> R;
+	fn visit_return(&mut self, stmt: &'parser ReturnStmt) -> R;
+	fn visit_break(&mut self, stmt: &'parser BreakStmt) -> R;
+	fn visit_continue(&mut self, stmt: &'parser ContinueStmt) -> R;
+	fn visit_class(&mut self, stmt: &'parser ClassStmt) -> R;
+	fn visit_instantiation(&mut self, stmt: &'parser InstantiationStmt) -> R;
 }
 
 pub trait Executable {
@@ -107,12 +109,12 @@ impl Analyzed for Print {
 
 
 pub struct VarStmt {
-    pub name: String,
+    pub name: Token, // TODO: Identifier
 	pub expression: Box<dyn Expr>, // TODO: Change to option
 }
 
 impl VarStmt {
-	pub fn boxed_new(expression: Box<dyn Expr>, name: String) -> Box<VarStmt> {
+	pub fn boxed_new(expression: Box<dyn Expr>, name: Token) -> Box<VarStmt> {
 		Box::new(VarStmt { expression, name })
 	}
 }
@@ -295,9 +297,9 @@ impl FunStmt {
 		FunStmt { aux: Rc::new(FunStmtAux { name, params, block }), closure: None }
 	}
 
-	pub fn boxed_new(name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> Box<FunStmt> {
-		Box::new(FunStmt::new(name, params, block))
-	}
+	// pub fn boxed_new(name: Token, params: Vec<Token>, block: Box<dyn Stmt>) -> Box<FunStmt> {
+	// 	Box::new(FunStmt::new(name, params, block))
+	// }
 }
 
 impl Stmt for FunStmt {}
@@ -423,5 +425,75 @@ impl FunctionDef for ContinueStmt {
 impl Analyzed for ContinueStmt {
 	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
 		visitor.visit_continue(self)
+	}
+}
+
+
+pub struct ClassStmt {
+	pub name: Token,
+	pub methods: Vec<FunStmt>,
+}
+
+impl ClassStmt {
+	pub fn boxed_new(name: Token, methods: Vec<FunStmt>) -> Box<ClassStmt> {
+		Box::new(ClassStmt { name, methods })
+	}
+}
+
+impl Stmt for ClassStmt {}
+
+impl Executable for ClassStmt {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_class(self)
+	}
+}
+
+impl NeedsSemicolon for ClassStmt {
+	fn needs_semicolon(&self) -> bool { false }
+}
+
+impl FunctionDef for ClassStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+impl Analyzed for ClassStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_class(self)
+	}
+}
+
+
+
+
+pub struct InstantiationStmt {
+	pub name: Token,
+	pub properties: PropertyStore,
+}
+
+impl InstantiationStmt {
+	pub fn boxed_new(name: Token, properties: PropertyStore) -> Box<InstantiationStmt> {
+		Box::new(InstantiationStmt { name, properties })
+	}
+}
+
+impl Stmt for InstantiationStmt {}
+
+impl Executable for InstantiationStmt {
+	fn execute<'declarator, 'parser>(&'parser self, visitor: &'declarator mut ASTDeclarator<'parser>) -> RuntimeDeclaration {
+		visitor.visit_instantiation(self)
+	}
+}
+
+impl NeedsSemicolon for InstantiationStmt {
+	fn needs_semicolon(&self) -> bool { false }
+}
+
+impl FunctionDef for InstantiationStmt {
+	fn function_def(&self) -> Option<FunStmt> { None }
+}
+
+impl Analyzed for InstantiationStmt {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_instantiation(self)
 	}
 }

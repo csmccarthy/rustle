@@ -1,6 +1,8 @@
 use crate::error_reporter::ErrorReporter;
+// use crate::stmts::FunStmt;
 
 use std::fmt::Display;
+// use std::format::Debug
 use std::ops::RangeInclusive;
 use std::collections::HashMap;
 use std::clone::Clone;
@@ -72,13 +74,39 @@ const CAPS: RangeInclusive<char> = RangeInclusive::new('A', 'Z');
 const LOWERS: RangeInclusive<char> = RangeInclusive::new('a', 'z');
 const NUMS: RangeInclusive<char> = RangeInclusive::new('0', '9');
 
-#[derive(Debug, Clone)]
+type FxnUID = usize;
+type InstanceUID = usize;
+
+// These can't hold -any- mutable state in them. Only values with copy semantics
+#[derive(Clone)]
 pub enum Literal {
     Num(f64),
     Str(String),
     Bool(bool),
-    Func(usize),
+    Func(FxnUID, Option<InstanceUID>),
+    // Class(String),
+    Instance(String, InstanceUID),
     Nil,
+}
+
+impl std::fmt::Debug for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::Num(num) => write!(f, "{}", &num),
+            Literal::Str(str) => write!(f, "{}", &str),
+            Literal::Bool(bool) => write!(f, "{}", &bool),
+            Literal::Func(idx, inst_idx_opt) => {
+                if let Some(inst_idx) = inst_idx_opt {
+                    write!(f, "fn(), vtable idx {}, bound instance: {}", &idx, &inst_idx)
+                } else {
+                    write!(f, "fn(), vtable idx {}", &idx)
+                }
+            },
+            // Literal::Class(str) => write!(f, "class {}", &str),
+            Literal::Instance(str, idx) => { write!(f, "instance {}, vtable idx {}", &str, idx) },
+            Literal::Nil => write!(f, "()"),
+        }
+    }
 }
 
 impl Display for Literal {
@@ -87,7 +115,15 @@ impl Display for Literal {
             Literal::Num(num) => write!(f, "{}", &num),
             Literal::Str(str) => write!(f, "{}", &str),
             Literal::Bool(bool) => write!(f, "{}", &bool),
-            Literal::Func(str) => write!(f, "fn {}()", &str),
+            Literal::Func(idx, inst_idx_opt) => {
+                if let Some(inst_idx) = inst_idx_opt {
+                    write!(f, "fn(), vtable idx {}, bound instance: {}", &idx, &inst_idx)
+                } else {
+                    write!(f, "fn(), vtable idx {}", &idx)
+                }
+            },
+            // Literal::Class(str) => write!(f, "class {}", &str),
+            Literal::Instance(str, idx) => { write!(f, "instance {}, vtable idx {}", &str, idx) },
             Literal::Nil => write!(f, "()"),
         }
     }

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 // use crate::evaluator::RuntimeResult;
-use crate::stmts::{ Stmt, StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt };
-use crate::exprs::{ Expr, ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda };
+use crate::stmts::{ Stmt, StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt, ClassStmt, InstantiationStmt };
+use crate::exprs::{ Expr, ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, This };
 
 #[derive(Debug)]
 pub enum SemanticError {
@@ -12,12 +12,15 @@ pub enum SemanticError {
     ContinueOutsideLoop,
     RedeclaredVariable,
     UnusedVariable,
+    ThisOutsideClass,
+    NonGlobalClass,
 }
 
 #[derive(Clone)]
 enum FunctionType {
     None,
     Function,
+    Method,
 }
 
 enum VarState {
@@ -104,10 +107,12 @@ impl ASTAnalyzer {
             self.declare(param.lexeme.clone())?;
         }
         self.nest();
-        let enclosing = self.fxn_type.clone();
-        self.fxn_type = fxn_type;
-        self.resolve_stmt(&fxn.aux.block)?;
-        self.fxn_type = enclosing;
+        if !matches!(self.fxn_type, FunctionType::Method) {
+            let enclosing = self.fxn_type.clone();
+            self.fxn_type = fxn_type;
+            self.resolve_stmt(&fxn.aux.block)?;
+            self.fxn_type = enclosing;
+        } else { self.resolve_stmt(&fxn.aux.block)?; }
         self.unnest();
         self.unnest();
         Ok(())
@@ -128,9 +133,9 @@ impl<'parser> StmtVisitor<'parser, SemanticResult> for ASTAnalyzer {
     }
 
     fn visit_var(&mut self, stmt: &'parser VarStmt) -> SemanticResult {
-        self.declare(stmt.name.clone())?;
+        self.declare(stmt.name.lexeme.clone())?;
         self.resolve_expr(&stmt.expression)?;
-        self.define(stmt.name.clone());
+        self.define(stmt.name.lexeme.clone());
         Ok(())
     }
 
@@ -196,7 +201,6 @@ impl<'parser> StmtVisitor<'parser, SemanticResult> for ASTAnalyzer {
     }
 
     fn visit_break(&mut self, _stmt: &'parser BreakStmt) -> SemanticResult {
-        // TODO: Make sure we're in a loop
         if self.in_loop == false {
             return Err(SemanticError::BreakOutsideLoop);
         }
@@ -204,13 +208,32 @@ impl<'parser> StmtVisitor<'parser, SemanticResult> for ASTAnalyzer {
     }
 
     fn visit_continue(&mut self, _stmt: &'parser ContinueStmt) -> SemanticResult {
-        // TODO: Make sure we're in a loop
         if self.in_loop == false {
             return Err(SemanticError::ContinueOutsideLoop);
         }
         Ok(())
     }
+
+    fn visit_class(&mut self, stmt: &'parser ClassStmt) -> SemanticResult {
+        if self.scopes.len() > 0 {
+            return Err(SemanticError::NonGlobalClass);
+        }
+        self.declare(stmt.name.lexeme.clone())?;
+        self.define(stmt.name.lexeme.clone());
+        self.nest();
+        self.define(String::from("this"));
+        for method in &stmt.methods {
+            self.resolve_fxn(method, FunctionType::Method)?;
+        }
+        self.unnest();
+        Ok(())
+    }
+
+    fn visit_instantiation(&mut self, _stmt: &'parser InstantiationStmt) -> SemanticResult {
+        Ok(())
+    }
 }
+
 
 impl<'parser> ExprVisitor<'parser, SemanticResult> for ASTAnalyzer {
     fn visit_binary<'evaluator>(&'evaluator mut self, expr: &'parser Binary) -> SemanticResult {
@@ -241,19 +264,14 @@ impl<'parser> ExprVisitor<'parser, SemanticResult> for ASTAnalyzer {
     }
 
     fn visit_assign<'evaluator>(&'evaluator mut self, expr: &'parser Assign) -> SemanticResult {
+        self.resolve_expr(&expr.identifier)?;
         self.resolve_expr(&expr.expression)?;
-        self.resolve_local(expr, expr.identifier.lexeme.clone());
+        // self.resolve_local(expr, expr.identifier.lexeme.clone()); // TODO: Might have to do something here for resolution?
         Ok(())
     }
 
     fn visit_variable<'evaluator>(&'evaluator mut self, expr: &'parser Variable) -> SemanticResult {
         let num_scopes = self.scopes.len();
-        // if num_scopes == 0 { return Ok(()) }
-        // let current_frame = self.scopes.get(num_scopes - 1).unwrap();
-        // println!("{}", &expr.identifier.lexeme);
-        // if current_frame.get(&expr.identifier.lexeme).unwrap() == &false {
-        //     return Err(SemanticError::UninitializedVariable);
-        // }
 
         if num_scopes > 0 {
             let current_frame = self.scopes.get(num_scopes - 1).unwrap();
@@ -293,4 +311,27 @@ impl<'parser> ExprVisitor<'parser, SemanticResult> for ASTAnalyzer {
         self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
         Ok(())
     }
+
+    fn visit_property<'evaluator>(&'evaluator mut self, expr: &'parser Property) -> SemanticResult {
+        // self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
+        self.resolve_expr(&expr.object)
+    }
+
+    fn visit_this<'evaluator>(&'evaluator mut self, expr: &'parser This) -> SemanticResult {
+        // self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
+        self.resolve_local(expr, String::from("this"));
+        if !matches!(self.fxn_type, FunctionType::Method) {
+            return Err(SemanticError::ThisOutsideClass);
+        }
+        Ok(())
+    }
+
+    // fn visit_instantiation<'evaluator>(&'evaluator mut self, expr: &'parser crate::exprs::Instantiation) -> SemanticResult {
+    //     // self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
+    //     // self.resolve_local(expr, String::from("this"));
+    //     // if !matches!(self.fxn_type, FunctionType::Method) {
+    //     //     return Err(SemanticError::ThisOutsideClass);
+    //     // }
+    //     Ok(())
+    // }
 }

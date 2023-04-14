@@ -1,23 +1,31 @@
 use crate::declarator::ASTDeclarator;
 use crate::evaluator::{ RuntimeError, RuntimeResult, RuntimeValue };
-use crate::exprs::Lambda;
-use crate::scanner::Literal;
-use crate::stmts::{ FunStmt, FunStmtAux };
+// use crate::exprs::Instantiation;
+// use crate::exprs::Lambda;
+use crate::scanner::{Literal, Token};
+use crate::stmts::{ FunStmt, FunStmtAux, InstantiationStmt };
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
 use std::sync::{ RwLock };
 use std::rc::Rc;
+// use std::sync::Arc;
 
 static GLOBAL_FXN_ID: AtomicUsize = AtomicUsize::new(0);
-// pub static GLOBAL_LMBDA_ID: AtomicUsize = AtomicUsize::new(0);
+static GLOBAL_INSTANCE_ID: AtomicUsize = AtomicUsize::new(0);
 
+type FunctionStore = HashMap<usize, FunStmt>;
+type RcLockedFunctionStore = Rc<RwLock<FunctionStore>>;
+
+pub type PropertyStore = HashMap<String, Literal>;
+type InstanceStore = HashMap<usize, PropertyStore>;
+type RcLockedInstanceStore = Rc<RwLock<InstanceStore>>;
 
 pub struct Environment {
     stack: Vec<HashMap<String, Literal>>,
-    functions: Rc<RwLock<HashMap<usize, FunStmt>>>,
-    lambdas: Rc<RwLock<HashMap<usize, Lambda>>>,
-    // locals: HashMap<
+    functions: RcLockedFunctionStore,
+    instances: RcLockedInstanceStore,
+    // lambdas: Rc<RwLock<HashMap<usize, Lambda>>>,
 }
 
 
@@ -29,8 +37,8 @@ impl Environment {
         stack.push(global);
         Environment {
             stack,
-            functions: Rc::new(RwLock::new(HashMap::new())),
-            lambdas: Rc::new(RwLock::new(HashMap::new()))
+            functions: RcLockedFunctionStore::default(),
+            instances: RcLockedInstanceStore::default(),
         }
     }
 
@@ -46,6 +54,51 @@ impl Environment {
             return Ok(());
         }
         return Err(RuntimeError::UndefinedVariable(name.to_owned()));
+    }
+
+    pub fn assign_instance(&mut self, uid: &usize, name: String, val: Literal) -> RuntimeResult<()> {
+        let mut unlocked = self.instances.write().unwrap();
+        let inst = unlocked.get_mut(uid).unwrap();
+        inst.insert(name, val);
+        Ok(())
+    }
+
+    pub fn get_field(&mut self, uid: &usize, name: &str) -> RuntimeResult<Literal> {
+        let unlocked = self.instances.read().unwrap();
+        let inst = unlocked.get(uid).unwrap();
+        match inst.get(name) {
+            Some(lit) => Ok(lit.clone()),
+            None => Ok(Literal::Nil),
+        }
+    }
+    
+    pub fn instantiate(&mut self, stmt: &InstantiationStmt) -> RuntimeResult<usize> {
+        let inst_uid: usize = GLOBAL_INSTANCE_ID.fetch_add(1, Ordering::SeqCst).into();
+        let mut bound_props: PropertyStore = HashMap::new();
+        for prop in &stmt.properties {
+            let name = prop.0.clone();
+            match prop.1 {
+                Literal::Func(idx, _) => bound_props.insert(name, Literal::Func(*idx, Some(inst_uid))),
+                x => bound_props.insert(name, x.clone()),
+            };
+        }
+        self.instances.write().unwrap().insert(inst_uid, bound_props);
+        let unlocked = self.instances.read().unwrap();
+        let inst = unlocked.get(&inst_uid).unwrap();
+        if let Some(lit) = inst.get("init") {
+            let mut args = Vec::new();
+            for arg in self.stack.get(self.stack.len() - 2).unwrap().values() {
+                args.push(arg.clone());
+            }
+            // println!("{}", args.len());
+            let lit = lit.clone();
+            drop(unlocked);
+            match lit {
+                Literal::Func(fxn_uid, inst_opt) => { self.call_fxn(&fxn_uid, &args, inst_opt)?; },
+                _ => return Err(RuntimeError::InvalidCallable(lit.clone())),
+            }
+        }
+        Ok(inst_uid)
     }
 
     fn current_scope_mut(&mut self) -> &mut HashMap<String, Literal> {
@@ -88,10 +141,20 @@ impl Environment {
         self.stack.pop();
     }
 
+    pub fn get_params(&self, uid: &usize) -> RuntimeResult<Vec<Token>> {
+        let unlocked_fxn = self.functions.read().unwrap();
+        let fxn_opt = unlocked_fxn.get(uid);
+        let fxn = match fxn_opt {
+            None => { return Err(RuntimeError::UndefinedFunction(String::from(""))) }, // TODO: give called token
+            Some(f) => f
+        };
+        Ok(fxn.aux.params.clone())
+    }
+
     pub fn store_fxn(&mut self, fxn: &FunStmt) -> usize {
         let name = &fxn.aux.name.lexeme;
         let fxn_uid: usize = GLOBAL_FXN_ID.fetch_add(1, Ordering::SeqCst).into();
-        self.current_scope_mut().insert(name.clone(), Literal::Func(fxn_uid));
+        self.current_scope_mut().insert(name.clone(), Literal::Func(fxn_uid, None));
         let mut fxn_clone = fxn.clone();
         let closure = self.clone();
         fxn_clone.closure = Some(closure);
@@ -99,26 +162,16 @@ impl Environment {
         fxn_uid
     }
 
-    // pub fn store_lambda(&mut self, fxn: &Lambda) -> usize {
-    //     // let name = &fxn.aux.name.lexeme;
-    //     let fxn_uid: usize = GLOBAL_LMBDA_ID.fetch_add(1, Ordering::SeqCst).into();
-	// 	let literal_name = format!("lambda {}", fxn_uid);
-    //     // let fxn_uid: usize = GLOBAL_FXN_ID.fetch_add(1, Ordering::SeqCst).into();
-    //     self.current_scope_mut().insert(literal_name, Literal::Func(fxn_uid));
-    //     let mut fxn_clone = fxn.clone();
-    //     let closure = self.clone();
-    //     fxn_clone.stmt.closure = Some(closure);
-    //     self.lambdas.write().unwrap().insert(fxn_uid, fxn_clone);
-    //     fxn_uid
-    // }
-
-    fn call_fxn_block(&mut self, args: &Vec<Literal>, fxn_aux: &mut Rc<FunStmtAux>) -> RuntimeValue {
+    fn call_fxn_block(&mut self, args: &Vec<Literal>, fxn_aux: &mut Rc<FunStmtAux>, opt: Option<usize>) -> RuntimeValue {
         self.nest(); // This nest creates a new stack frame for function arguments
         for arg_item in args.iter().zip(&fxn_aux.params) {
-            if let Literal::Func(name) = arg_item.0 {
-                self.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name));
+            if let Literal::Func(name, inst_uid) = arg_item.0 {
+                self.current_scope_mut().insert(arg_item.1.lexeme.clone(), Literal::Func(*name, *inst_uid));
             }
             self.define(arg_item.1.lexeme.to_owned(), arg_item.0.to_owned())?;
+        }
+        if let Some(inst_uid) = opt {
+            self.define(String::from("this"), Literal::Instance(String::from("self"), inst_uid))?; // TODO: Fix name given here
         }
         let mut decl = ASTDeclarator::new(self);
         let res = fxn_aux.block.execute(&mut decl);
@@ -126,8 +179,8 @@ impl Environment {
         match res {
             Ok(_) => Ok(Literal::Nil),
             Err(RuntimeError::Return(literal)) => {
-                if let Literal::Func(name) = &literal {
-                    self.current_scope_mut().insert(literal.to_string(), Literal::Func(*name));
+                if let Literal::Func(name, inst_uid) = &literal {
+                    self.current_scope_mut().insert(literal.to_string(), Literal::Func(*name, *inst_uid));
                 }
                 Ok(literal)
             },
@@ -135,20 +188,11 @@ impl Environment {
         }
     }
 
-    pub fn call_fxn(&mut self, name: &str, args: &Vec<Literal>) -> RuntimeValue {
-        let literal_opt = self.get(name);
-        let fxn_literal = match literal_opt {
-            Err(_) => { println!("here"); return Err(RuntimeError::UndefinedFunction(name.to_owned())) },
-            Ok(f) => f
-        };
-        let fxn_clone = self.functions.clone();
-        let unlocked_fxn = fxn_clone.read().unwrap();
-        let fxn_opt = match fxn_literal {
-            Literal::Func(name) => unlocked_fxn.get(&name),
-            _ => return Err(RuntimeError::InvalidCallable(fxn_literal.clone()))
-        };
+    pub fn call_fxn(&mut self, uid: &usize, args: &Vec<Literal>, opt: Option<usize>) -> RuntimeValue {
+        let unlocked_fxn = self.functions.read().unwrap();
+        let fxn_opt = unlocked_fxn.get(uid);
         let fxn = match fxn_opt {
-            None => { println!("no, here"); return Err(RuntimeError::UndefinedFunction(name.to_owned())) },
+            None => { return Err(RuntimeError::UndefinedFunction(String::from(""))) }, // TODO: give called token
             Some(f) => f
         };
         if fxn.aux.params.len() != args.len() {
@@ -158,8 +202,8 @@ impl Environment {
         drop(unlocked_fxn);
 
         return match borrow.closure {
-            None => { self.call_fxn_block(args, &mut borrow.aux) },
-            Some(mut env) => { env.call_fxn_block(args, &mut borrow.aux) },
+            None => { self.call_fxn_block(args, &mut borrow.aux, opt) },
+            Some(mut env) => { env.call_fxn_block(args, &mut borrow.aux, opt) },
         }
         
     }
@@ -171,7 +215,7 @@ impl Clone for Environment {
         Environment {
             stack: self.stack.clone(),
             functions: self.functions.clone(),
-            lambdas: self.lambdas.clone(),
+            instances: self.instances.clone(),
         }
     }
 }

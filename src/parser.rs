@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda };
-use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt };
+use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, This };
+use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt, ClassStmt };
 use crate::scanner::{ Token, Tokens, Literal as LiteralValue };
 
 pub struct Parser {
@@ -16,6 +16,13 @@ pub enum SyntaxError {
     ExpectedLiteral(u16, Vec<Token>),
     NotLValue(Box<dyn Expr>),
     EOFReached,
+    NotChainable,
+}
+
+enum ChainType {
+    Primary,
+    Property,
+    Call
 }
 
 impl Display for SyntaxError {
@@ -44,6 +51,9 @@ impl Display for SyntaxError {
             },
             SyntaxError::NotLValue(expr) => {
                 return write!(f, "Invalid expression given for L Value: {}", expr)
+            },
+            SyntaxError::NotChainable => {
+                return write!(f, "Invalid expression chain")
             },
         }
     }
@@ -92,6 +102,7 @@ impl Parser {
     fn declaration(&mut self) -> ParseResult<Box<dyn Stmt>> {
         if self.match_token(Tokens::Var) { return Ok(self.var_decl()?) }
         if self.match_token(Tokens::Fxn) { return Ok(self.fun_decl()?) }
+        if self.match_token(Tokens::Class) { return Ok(self.class_decl()?) }
         self.stmt()
     }
 
@@ -102,8 +113,8 @@ impl Parser {
         else if self.match_token(Tokens::While) { return Ok(self.while_loop()?) }
         else if self.match_token(Tokens::For) { return Ok(self.for_loop()?) }
         else if self.match_token(Tokens::Return) { return Ok(self.return_stmt()?) }
-        else if self.match_token(Tokens::Break) { return Ok(BreakStmt::boxed_new()) } // TODO: Handle outside of loop
-        else if self.match_token(Tokens::Continue) { return Ok(ContinueStmt::boxed_new()) } // TODO: Handle outside of loop
+        else if self.match_token(Tokens::Break) { return Ok(BreakStmt::boxed_new()) }
+        else if self.match_token(Tokens::Continue) { return Ok(ContinueStmt::boxed_new()) }
         self.expression_stmt()
     }
 
@@ -177,11 +188,61 @@ impl Parser {
         Ok(BlockStmt::boxed_new(stmts))
     }
 
+    fn parse_fxn(&mut self) -> ParseResult<FunStmt> {
+        let name = self.extract_name()?;
+        if !self.match_token(Tokens::LeftParenthesis) {
+            return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()))
+        }
+        let mut params = Vec::new();
+        if self.match_token(Tokens::RightParenthesis) {
+            if !self.match_token(Tokens::LeftBrace) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+            }
+            let block = self.block()?;
+            return Ok(FunStmt::new(name, params, block));
+        } else {
+            params.push(self.extract_name()?);
+            while self.match_token(Tokens::Comma) {
+                params.push(self.extract_name()?);
+            }
+            if !self.match_token(Tokens::RightParenthesis) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()));
+            }
+            if !self.match_token(Tokens::LeftBrace) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+            }
+            let block = self.block()?;
+            return Ok(FunStmt::new(name, params, block));
+        }
+    }
+
+    fn class_decl(&mut self) -> ParseResult<Box<dyn Stmt>> {
+        let name = match self.advance() {
+            None => return Err(SyntaxError::EOFReached),
+            Some(tk) if tk.token_type == Tokens::Identifier => {
+                tk.clone()
+            }
+            Some(_) => return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        };
+        if !self.match_token(Tokens::LeftBrace) {
+            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        }
+        
+        let mut fxns = Vec::new();
+        while self.match_token(Tokens::Fxn) {
+            fxns.push(self.parse_fxn()?);
+        }
+        if !self.match_token(Tokens::RightBrace) {
+            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        }
+        Ok(ClassStmt::boxed_new(name, fxns))
+    }
+
     fn var_decl(&mut self) -> ParseResult<Box<dyn Stmt>> {
         let name = match self.advance() {
             None => return Err(SyntaxError::EOFReached),
             Some(tk) if tk.token_type == Tokens::Identifier => {
-                tk.lexeme.clone()
+                tk.clone()
             }
             Some(_) => return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
         };
@@ -204,31 +265,7 @@ impl Parser {
     }
 
     fn fun_decl(&mut self) -> ParseResult<Box<dyn Stmt>> {
-        let name = self.extract_name()?;
-        if !self.match_token(Tokens::LeftParenthesis) {
-            return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()))
-        }
-        let mut params = Vec::new();
-        if self.match_token(Tokens::RightParenthesis) {
-            if !self.match_token(Tokens::LeftBrace) {
-                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
-            }
-            let block = self.block()?;
-            return Ok(FunStmt::boxed_new(name, params, block));
-        } else {
-            params.push(self.extract_name()?);
-            while self.match_token(Tokens::Comma) {
-                params.push(self.extract_name()?);
-            }
-            if !self.match_token(Tokens::RightParenthesis) {
-                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()));
-            }
-            if !self.match_token(Tokens::LeftBrace) {
-                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
-            }
-            let block = self.block()?;
-            return Ok(FunStmt::boxed_new(name, params, block));
-        }
+        Ok(Box::new(self.parse_fxn()?))
     }
 
     fn expression_stmt(&mut self) -> ParseResult<Box<dyn Stmt>> {
@@ -250,13 +287,17 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> ParseResult<Box<dyn Expr>> {
-        let expr = self.ternary()?;
+        let expr = match self.chain_expr() {
+            Err(SyntaxError::NotChainable) => return Ok(self.ternary()?),
+            Err(e) => return Err(e),
+            Ok(tup) => tup.1,
+        };
         if self.match_token(Tokens::Assign) {
-            let val = self.assignment()?;
-            match expr.assignment_target() {
-                Some(i) => return Ok(Assign::boxed_new(i, val)),
-                None => return Err(SyntaxError::NotLValue(expr))
+            if let None = expr.assignment_target() {
+                return Err(SyntaxError::NotLValue(expr));
             }
+            let val = self.assignment()?;
+            return Ok(Assign::boxed_new(expr, val));
         }
         Ok(expr)
     }
@@ -276,7 +317,6 @@ impl Parser {
 
     fn lambda(&mut self) -> ParseResult<Box<dyn Expr>> {
         if self.match_token(Tokens::Fxn) {
-            // let name = self.extract_name()?;
             if !self.match_token(Tokens::LeftParenthesis) {
                 return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()))
             }
@@ -357,39 +397,66 @@ impl Parser {
             let right = self.unary()?;
             return Ok(Unary::boxed_new(operator, right));
         }
-        self.call()
+        self.get_expr()
     }
 
-    fn call(&mut self) -> ParseResult<Box<dyn Expr>> {
-        let expr = self.primary()?;
-        let identifier = match self.previous() {
-            Some(tk) if tk.token_type == Tokens::Identifier => {
+    fn parse_call(&mut self, expr: Box<dyn Expr>) -> ParseResult<Box<Call>> {
+        let mut args = Vec::new();
+        if self.match_token(Tokens::RightParenthesis) {
+            return Ok(Call::boxed_new(expr, args));
+        } else {
+            args.push(self.assignment()?);
+            while self.match_token(Tokens::Comma) {
+                args.push(self.assignment()?);
+            }
+            if !self.match_token(Tokens::RightParenthesis) {
+                return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()));
+            }
+            return Ok(Call::boxed_new(expr, args));
+        }
+    }
+
+    fn parse_property(&mut self, expr: Box<dyn Expr>) -> ParseResult<Box<Property>> {
+        let prop = match self.advance() {
+            None => return Err(SyntaxError::EOFReached),
+            Some(tk) if tk.token_type == Tokens::Identifier => tk.clone(),
+            Some(_) => return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+        };
+        Ok(Property::boxed_new(expr, prop))
+    }
+
+    fn chain_expr(&mut self) -> ParseResult<(ChainType, Box<dyn Expr>)> {
+        // let mut expr = self.primary()?;
+        let mut chain_type = ChainType::Primary;
+        let identifier = match self.peek() {
+            Some(tk) if tk.token_type == Tokens::Identifier || tk.token_type == Tokens::This => {
                 Some(tk.clone())
             },
-            _ => None
+            _ => return Err(SyntaxError::NotChainable)
         };
-        // println!("{:?}", identifier);
-        if let Some(tk) = identifier {
+        let mut expr = self.primary()?;
+        if let Some(_) = identifier {
             loop {
                 if self.match_token(Tokens::LeftParenthesis) {
-                    // println!("making fxn call");
-                    let mut args = Vec::new();
-                    if self.match_token(Tokens::RightParenthesis) {
-                        return Ok(Call::boxed_new(tk, args));
-                    } else {
-                        args.push(self.assignment()?);
-                        while self.match_token(Tokens::Comma) {
-                            args.push(self.assignment()?);
-                        }
-                        if !self.match_token(Tokens::RightParenthesis) {
-                            return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()));
-                        }
-                        return Ok(Call::boxed_new(tk, args));
-                    }
-                } else { break; }
+                    expr = self.parse_call(expr)?;
+                    chain_type = ChainType::Call;
+                }
+                else if self.match_token(Tokens::Period) {
+                    expr = self.parse_property(expr)?;
+                    chain_type = ChainType::Property;
+                }
+                else { break; }
             }
         }
-        Ok(expr)
+        Ok((chain_type, expr))
+    }
+
+    fn get_expr(&mut self) -> ParseResult<Box<dyn Expr>> {
+        return match self.chain_expr() {
+            Err(SyntaxError::NotChainable) => Ok(self.primary()?),
+            Err(e) => Err(e),
+            Ok(tup) => Ok(tup.1),
+        }
     }
 
     fn primary(&mut self) -> ParseResult<Box<dyn Expr>> {
@@ -416,8 +483,10 @@ impl Parser {
         else if self.match_token(Tokens::Identifier) {
             return Ok(Variable::boxed_new(self.previous().unwrap().clone()));
         }
+        else if self.match_token(Tokens::This) {
+            return Ok(This::boxed_new(self.previous().unwrap().clone()));
+        }
         else if self.match_token(Tokens::EOF) {
-            // println!("here");
             return Err(SyntaxError::EOFReached);
         }
         Err(SyntaxError::ExpectedLiteral(self.peek().unwrap().line, Vec::new()))

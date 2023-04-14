@@ -1,10 +1,37 @@
-fun fib(n) {
-    if n <= 1 {
-        return n;
+
+class Example {
+    fxn init(field) {
+        this.field = field;
     }
-    return fib(n - 2) + fib(n - 1);
+
+    fxn print_me() {
+        return fxn (a) {
+            print this;
+        };
+    }
+
+    fxn test_init() {
+        print this.field;
+    }
 }
 
-for var i = 0; i < 20; i = i + 1 {
-    print fib(i);
+fxn printer() {
+    print "heh";
 }
+
+print Example;
+print Example("0");
+print printer;
+printer();
+// Example("1").print_me()("hi");
+Example("2").print_me();
+// Example("3").print_me() = "error";
+
+var a = Example("hi");
+a.test_init();
+
+a.field = "stored it :)";
+print a.field;
+a.field = "new value :o";
+print a.field;
+a.test_init();

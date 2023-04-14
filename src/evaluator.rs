@@ -1,7 +1,7 @@
 
 
 use crate::scanner::{ Tokens, Literal as LiteralValue };
-use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda };
+use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, AssignmentTarget, This };
 // use std::collections::HashMap;
 use crate::environment::{ Environment };
 // use crate::stmts::{ FunStmt };
@@ -19,6 +19,8 @@ pub enum RuntimeError {
 	UndefinedVariable(String),
 	UndefinedFunction(String),
 	InvalidCallable(LiteralValue),
+	InvalidAccessor(LiteralValue),
+	InvalidLValue(LiteralValue),
 	MismatchedArguments(usize, usize),
 	Return(LiteralValue),
 	Break,
@@ -178,9 +180,23 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
 	}
 
 	fn visit_assign(&mut self, expr: &'parser Assign) -> RuntimeValue {
-        let val = expr.expression.evaluate(self)?;
-		self.stack.assign(&expr.identifier.lexeme, val)?;
-        Ok(LiteralValue::Nil)
+		let val = expr.expression.evaluate(self)?;
+		match expr.identifier.assignment_target() {
+			Some(AssignmentTarget::Variable(str)) => {
+				self.stack.assign(&str, val)?;
+			},
+			Some(AssignmentTarget::Field(inst_expr, prop)) => {
+				let inst_lit = inst_expr.evaluate(self)?;
+				match inst_lit {
+					LiteralValue::Instance(_, inst_uid) => {
+						self.stack.assign_instance(&inst_uid, prop, val)?;
+					},
+					_ => return Err(RuntimeError::InvalidLValue(inst_lit)),
+				}
+			}
+			_ => return Err(RuntimeError::InvalidLValue(expr.identifier.evaluate(self)?)),
+		}
+		Ok(LiteralValue::Nil)
 	}
 
 	fn visit_or(&mut self, expr: &'parser OrExpr) -> RuntimeValue {
@@ -218,12 +234,48 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
         for arg in &expr.args {
             literal_args.push(arg.evaluate(self)?);
         }
-        self.stack.call_fxn(&expr.identifier.lexeme, &literal_args)
+		let literal = expr.identifier.evaluate(self)?;
+		if let LiteralValue::Func(uid, opt) = literal {
+			return self.stack.call_fxn(&uid, &literal_args, opt);
+			// let record = map.get(&expr.identifier.lexeme);
+			// if let Some(uid) = record { return Ok(LiteralValue::Func(*uid)); }
+		}
+		Err(RuntimeError::InvalidCallable(literal.clone()))
 	}
 
 	fn visit_lambda(&mut self, expr: &'parser Lambda) -> RuntimeValue {
 		// let fxn = expr.clone();
         let fxn_uid = self.stack.store_fxn(&expr.stmt);
-        Ok(LiteralValue::Func(fxn_uid))
+        Ok(LiteralValue::Func(fxn_uid, None))
 	}
+
+	fn visit_property(&mut self, expr: &'parser Property) -> RuntimeValue {
+		let literal = expr.object.evaluate(self)?;
+		if let LiteralValue::Instance(_, ref uid) = literal {
+			return Ok(self.stack.get_field(uid, &expr.identifier.lexeme))?;
+		}
+		Err(RuntimeError::InvalidAccessor(literal.clone()))
+	}
+
+	fn visit_this(&mut self, _expr: &'parser This) -> RuntimeValue {
+		let expr = self.stack.get("this")?;
+        Ok(expr)
+		// let literal = expr.object.evaluate(self)?;
+		// if let LiteralValue::Instance(_, ref uid) = literal {
+		// 	return Ok(self.stack.get_field(uid, &expr.identifier.lexeme))?;
+		// }
+		// Err(RuntimeError::InvalidAccessor(literal.clone()))
+	}
+
+	// fn visit_instantiation(&mut self, expr: &'parser Instantiation) -> RuntimeValue {
+	// 	let expr = self.stack.get("this")?;
+    //     Ok(expr)
+    //     // let uid = self.stack.instantiate(expr)?;
+    //     // Ok(LiteralValue::Instance(expr.name.lexeme.clone(), uid))
+	// 	// let literal = expr.object.evaluate(self)?;
+	// 	// if let LiteralValue::Instance(_, ref uid) = literal {
+	// 	// 	return Ok(self.stack.get_field(uid, &expr.identifier.lexeme))?;
+	// 	// }
+	// 	// Err(RuntimeError::InvalidAccessor(literal.clone()))
+	// }
 }

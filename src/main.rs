@@ -13,9 +13,7 @@ mod analyzer;
 
 
 use scanner::{ Scanner };
-// use scanner::{ Token, Tokens, Literal as LiteralValue };
 use error_reporter::ErrorReporter;
-// use evaluator::{ ASTEvaluator };
 use declarator::{ ASTDeclarator };
 use parser::{ Parser, SyntaxError };
 use stmts::{ Stmt };
@@ -32,47 +30,46 @@ fn run(line: String) { // Should use bytes instead of String
     let mut scanner = Scanner::new(line.to_owned());
     let reporter = ErrorReporter;
     scanner.scan_tokens(reporter);
-    // for token in &scanner.tokens {
-    //     println!("{:?}", token.token_type);
-    // }
     let mut parser = Parser::new(scanner.tokens);
     parser.parse();
     let errs_ref: &Vec<SyntaxError> = &parser.errs;
     if errs_ref.len() > 0 {
-        println!("Errors:");
+        println!("Parse Errors:");
         for err in errs_ref {
             eprintln!("{}", err);
         }
+        return;
     }
     
     let mut analyzer = ASTAnalyzer::new();
     for stmt in &parser.stmts {
-        println!("{:?}", stmt.accept(&mut analyzer));
+        let mut errs = Vec::new();
+        if let Err(e) = stmt.accept(&mut analyzer) {
+            errs.push(e);
+        }
+        if errs.len() > 0 {
+            println!("Semantic Errors:");
+            for err in errs { println!("{:?}", err); }
+            return;
+        }
     }
 
-    // let mut env = Environment::new();
-    // let mut decl = ASTDeclarator::new(&mut env);
-    // for stmt in &parser.stmts {
-    //     // print!("{} →  ", stmt);
-    //     if io::stdout().flush().is_err() { eprintln!("Issue flushing statement to stdout") };
-    //     let stmt: &Box<dyn Stmt> = stmt;
-    //     let res = stmt.execute(&mut decl);
-    //     match res {
-    //         Err(e) => eprintln!("Runtime Error: {:?}", e),
-    //         // Ok(val) => println!("{}", "Run successfully"),
-    //         _ => ()
-    //     }
-    // }
-    // parser;
+    let mut env = Environment::new();
+    let mut decl = ASTDeclarator::new(&mut env);
+    for stmt in &parser.stmts {
+        if io::stdout().flush().is_err() { eprintln!("Issue flushing statement to stdout") };
+        let stmt: &Box<dyn Stmt> = stmt;
+        let res = stmt.execute(&mut decl);
+        match res {
+            Err(e) => eprintln!("Runtime Error: {:?}", e),
+            _ => ()
+        }
+    }
 }
 
 
 fn main() {
-
-    // let printer = AstPrinter;
-    // printer.print(&expression4);
-
-    let path = Path::new("example.rulox");
+    let path = Path::new("example2.rulox");
     let file = match File::open(&path) {
         Err(e) => panic!("Couldn't open {}: {}", path.display(), e),
         Ok(file) => file

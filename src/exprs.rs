@@ -1,3 +1,4 @@
+// use crate::environment::PropertyStore;
 use crate::scanner::{ Token, Literal as LiteralValue };
 use crate::evaluator::{ ASTEvaluator, RuntimeValue };
 // use crate::declarator::{ RuntimeDeclaration };
@@ -7,7 +8,6 @@ use crate::analyzer::{ ASTAnalyzer, Analyzed, SemanticResult };
 use std::fmt::Display;
 // use std::rc::{ Rc };
 // use std::hash::{ Hash, Hasher };
-
 
 
 pub trait ExprVisitor<'parser, R> {
@@ -22,6 +22,9 @@ pub trait ExprVisitor<'parser, R> {
 	fn visit_and<'evaluator>(&'evaluator mut self, expr: &'parser AndExpr) -> R;
 	fn visit_call<'evaluator>(&'evaluator mut self, expr: &'parser Call) -> R;
 	fn visit_lambda<'evaluator>(&'evaluator mut self, expr: &'parser Lambda) -> R;
+	fn visit_property<'evaluator>(&'evaluator mut self, expr: &'parser Property) -> R;
+	fn visit_this<'evaluator>(&'evaluator mut self, expr: &'parser This) -> R;
+	// fn visit_instantiation<'evaluator>(&'evaluator mut self, expr: &'parser Instantiation) -> R;
 }
 
 pub trait Evaluable {
@@ -31,11 +34,16 @@ pub trait Evaluable {
 	) -> RuntimeValue;
 }
 
-pub trait AssignmentTarget {
-	fn assignment_target(&self) -> Option<Token>;
+pub enum AssignmentTarget<'a> {
+	Variable(String),
+	Field(&'a Box<dyn Expr>, String)
 }
 
-pub trait Expr: Display+Evaluable+AssignmentTarget+Analyzed {}
+pub trait Assignable {
+	fn assignment_target(&self) -> Option<AssignmentTarget>;
+}
+
+pub trait Expr: Display+Evaluable+Assignable+Analyzed {}
 
 
 pub struct Binary {
@@ -58,8 +66,8 @@ impl Analyzed for Binary {
 	}
 }
 
-impl AssignmentTarget for Binary {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for Binary {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for Binary {
@@ -93,8 +101,8 @@ impl Analyzed for Grouping {
 	}
 }
 
-impl AssignmentTarget for Grouping {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for Grouping {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for Grouping {
@@ -128,8 +136,8 @@ impl Analyzed for Literal {
 	}
 }
 
-impl AssignmentTarget for Literal {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for Literal {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for Literal {
@@ -164,8 +172,8 @@ impl Analyzed for Unary {
 	}
 }
 
-impl AssignmentTarget for Unary {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for Unary {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for Unary {
@@ -201,8 +209,8 @@ impl Analyzed for Ternary {
 	}
 }
 
-impl AssignmentTarget for Ternary {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for Ternary {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for Ternary {
@@ -219,12 +227,12 @@ impl Display for Ternary {
 
 
 pub struct Assign {
-	pub identifier: Token,
+	pub identifier: Box<dyn Expr>,
 	pub expression: Box<dyn Expr>,
 }
 
 impl Assign {
-	pub fn boxed_new(identifier: Token, expression: Box<dyn Expr>) -> Box<Assign> {
+	pub fn boxed_new(identifier: Box<dyn Expr>, expression: Box<dyn Expr>) -> Box<Assign> {
 		Box::new(Assign { identifier, expression })
 	}
 }
@@ -237,8 +245,8 @@ impl Analyzed for Assign {
 	}
 }
 
-impl AssignmentTarget for Assign {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for Assign {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for Assign {
@@ -249,7 +257,7 @@ impl Evaluable for Assign {
 
 impl Display for Assign {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "({} = {})", self.identifier.lexeme, self.expression)
+		write!(f, "({} = {})", self.identifier, self.expression)
     }
 }
 
@@ -272,8 +280,10 @@ impl Analyzed for Variable {
 	}
 }
 
-impl AssignmentTarget for Variable {
-	fn assignment_target(&self) -> Option<Token> { Some(self.identifier.clone()) }
+impl Assignable for Variable {
+	fn assignment_target(&self) -> Option<AssignmentTarget> {
+		Some(AssignmentTarget::Variable(self.identifier.lexeme.clone()))
+	}
 }
 
 impl Evaluable for Variable {
@@ -308,8 +318,8 @@ impl Analyzed for OrExpr {
 	}
 }
 
-impl AssignmentTarget for OrExpr {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for OrExpr {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for OrExpr {
@@ -344,8 +354,8 @@ impl Analyzed for AndExpr {
 	}
 }
 
-impl AssignmentTarget for AndExpr {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for AndExpr {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for AndExpr {
@@ -362,12 +372,12 @@ impl Display for AndExpr {
 
 
 pub struct Call {
-	pub identifier: Token,
+	pub identifier: Box<dyn Expr>,
 	pub args: Vec<Box<dyn Expr>>,
 }
 
 impl Call {
-	pub fn boxed_new(identifier: Token, args: Vec<Box<dyn Expr>>) -> Box<Call> {
+	pub fn boxed_new(identifier: Box<dyn Expr>, args: Vec<Box<dyn Expr>>) -> Box<Call> {
 		Box::new(Call { identifier, args })
 	}
 }
@@ -380,8 +390,8 @@ impl Analyzed for Call {
 	}
 }
 
-impl AssignmentTarget for Call {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for Call {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for Call {
@@ -432,8 +442,8 @@ impl Clone for Lambda {
 	}
 }
 
-impl AssignmentTarget for Lambda {
-	fn assignment_target(&self) -> Option<Token> { None }
+impl Assignable for Lambda {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
 }
 
 impl Evaluable for Lambda {
@@ -451,3 +461,113 @@ impl Display for Lambda {
 		write!(f, ")")
     }
 }
+
+
+pub struct Property {
+	pub object: Box<dyn Expr>,
+	pub identifier: Token,
+}
+
+impl Property {
+	pub fn boxed_new(object: Box<dyn Expr>, identifier: Token) -> Box<Property> {
+		Box::new(Property { object, identifier })
+	}
+}
+
+impl Expr for Property {}
+
+impl Analyzed for Property {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_property(self)
+	}
+}
+
+impl Assignable for Property {
+	fn assignment_target(&self) -> Option<AssignmentTarget> {
+		Some(AssignmentTarget::Field(&self.object, self.identifier.lexeme.clone()))
+	}
+}
+
+impl Evaluable for Property {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+		visitor.visit_property(self)
+	}
+}
+
+impl Display for Property {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}.{}", self.object, self.identifier.lexeme)
+    }
+}
+
+
+pub struct This {
+	pub identifier: Token,
+}
+
+impl This {
+	pub fn boxed_new(identifier: Token) -> Box<This> {
+		Box::new(This { identifier })
+	}
+}
+
+impl Expr for This {}
+
+impl Analyzed for This {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_this(self)
+	}
+}
+
+impl Assignable for This {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
+}
+
+impl Evaluable for This {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+		visitor.visit_this(self)
+	}
+}
+
+impl Display for This {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "var {}", self.identifier.lexeme)
+    }
+}
+
+
+// pub struct Instantiation {
+// 	pub name: Token,
+// 	pub properties: PropertyStore,
+// }
+
+// impl Instantiation {
+// 	pub fn boxed_new(name: Token, properties: PropertyStore) -> Box<Instantiation> {
+// 		Box::new(Instantiation { name, properties })
+// 	}
+// }
+
+// impl Expr for Instantiation {}
+
+// impl Analyzed for Instantiation {
+// 	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+// 		visitor.visit_instantiation(self)
+// 	}
+// }
+
+// impl Assignable for Instantiation {
+// 	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
+// }
+
+// impl Evaluable for Instantiation {
+// 	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+// 		visitor.visit_instantiation(self)
+// 	}
+// }
+
+// impl Display for Instantiation {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+// 		write!(f, "constructor {}", self.name.lexeme)
+//     }
+// }
+
