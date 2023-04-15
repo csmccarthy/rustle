@@ -1,0 +1,38 @@
+{
+  "name": "rlox-lang",
+  "displayName": "rlox lang",
+  "description": "rlox syntax highlighting",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "scripts": {
+    "compile": "tsc -p ./",
+    "package": "vsce package"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "rlox",
+        "aliases": [
+          "RLox",
+          "rlox"
+        ],
+        "extensions": [
+          ".rulox"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rlox",
+        "scopeName": "source.rlox",
+        "path": "./syntaxes/rlox.tmLanguage.json"
+      }
+    ]
+  }
+}

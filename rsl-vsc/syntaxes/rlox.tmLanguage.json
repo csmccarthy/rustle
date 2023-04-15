@@ -1,0 +1,267 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "RLox",
+	"patterns": [{ "include": "#declaration" }],
+	"repository": {
+		"declaration": {
+			"match": "\\s*(.+)",
+			"captures": {
+				"1": {
+					"patterns": [
+						{ "include": "#comment_line" },
+						{ "include": "#class_declaration" },
+						{ "include": "#var_declaration" },
+						{ "include": "#var_definition" },
+						{ "include": "#fxn_declaration" },
+						{ "include": "#statement" }
+					]
+				}
+			}
+		},
+		"comment_line": {
+			"match": "(//.*)",
+			"captures": {
+				"1": { "name": "comment.line.rlox" }
+			}
+		},
+		"class_declaration": {
+			"match": "(class) ([a-zA-Z_]\\w*)( < ([a-zA-Z_]\\w*))?",
+			"captures": {
+				"1": { "name": "keyword.other.rlox" },
+				"2": { "name": "entity.name.class.rlox" },
+				"4": { "name": "entity.name.class.rlox" }
+			}
+		},
+		"var_declaration": {
+			"match": "(var) ([a-zA-Z_]\\w*)",
+			"captures": {
+				"1": { "name": "keyword.other.rlox" },
+				"2": { "name": "variable.other.rlox" }
+			}
+		},
+		"var_definition": {
+			"match": "(var) (.+)",
+			"captures": {
+				"1": { "name": "keyword.other.rlox" },
+				"2": {
+					"patterns": [
+						{ "include": "#assignment" }
+					]
+				}
+			}
+		},
+		"fxn_declaration": {
+			"match": "(fxn) ?([a-zA-Z_][\\w]*)(\\((.*)\\))?",
+			"captures": {
+				"1": { "name": "keyword.other.rlox" },
+				"2": { "name": "entity.name.function.rlox" },
+				"4": { "patterns": [{ "include": "#param_list" }] }
+			}
+		},
+		"statement": {
+			"patterns": [
+				{ "include": "#break_statement" },
+				{ "include": "#continue_statement" },
+				{ "include": "#return_statement" },
+				{ "include": "#print_statement" },
+				{ "include": "#if_statement" },
+				{ "include": "#while_loop" },
+				{ "include": "#for_loop" },
+				{ "include": "#expression_statement" }
+			]
+		},
+
+		"break_statement": {
+			"match": "(break)\\b",
+			"captures": {
+				"1": { "name": "keyword.control.rlox" }
+			}
+		},
+
+		"continue_statement": {
+			"match": "(continue)\\b",
+			"captures": {
+				"1": { "name": "keyword.control.rlox" }
+			}
+		},
+
+		"return_statement": {
+			"match": "(return)\\b( ([^{]+)?)?",
+			"captures": {
+				"1": { "name": "keyword.control.rlox" },
+				"3": { "patterns": [{ "include": "#expression" }] }
+			}
+		},
+
+		"print_statement": {
+			"match": "(print)\\b( ([^{]+)?)?",
+			"captures": {
+				"1": { "name": "keyword.control.rlox" },
+				"3": { "patterns": [{ "include": "#expression" }] }
+			}
+		},
+
+		"if_statement": {
+			"match": "((if|else if) ([^{]+)|((} ?)?(else)))",
+			"captures": {
+				"2": { "name": "keyword.control.rlox" },
+				"3": { "patterns": [{ "include": "#expression" }] },
+				"6": { "name": "keyword.control.rlox" }
+			}
+		},
+
+		"while_loop": {
+			"match": "(while)( ([^{]+))? ?",
+			"captures": {
+				"1": { "name": "keyword.control.rlox" },
+				"2": { "patterns": [{ "include": "#expression" }] }
+			}
+		},
+
+		"for_loop": {
+			"match": "(for)( ((var) )?(.+)?(;? ?(.+)?)?; ?(.+)?)?",
+			"captures": {
+				"1": { "name": "keyword.control.rlox" },
+				"4": { "name": "keyword.other.rlox" },
+				"5": {
+					"patterns": [
+						{ "include": "#assignment" }
+					]
+				},
+				"7": { "patterns": [{ "include": "#binary" }] },
+				"8": { "patterns": [{ "include": "#assignment" }] }
+			}
+		},
+
+		"expression_statement": {
+			"begin": "([^{;\\n]+)",
+			"beginCaptures": {
+				"1": { "patterns": [{ "include": "#expression" }] }
+			},
+			"end": "[;\\n]"
+		},
+
+		"expression": { "patterns" : [{ "include": "#assignment" }, { "include": "#ternary" }] },
+
+		"assignment": {
+			"match": "(.+) ?(=) ?(.+)",
+			"captures": {
+				"1": { "patterns": [{ "include": "#ternary" }] },
+				"2": { "name": "keyword.operator.rlox" },
+				"3": { "patterns": [{ "include": "#ternary" }] }
+			}
+		},
+
+		"ternary": {
+			"match": "(.+)( ?(\\?) ?(.+) ?(:) ? (.+))*",
+			"captures": {
+				"1": { "patterns": [{ "include": "#lambda" }] },
+				"3": { "name": "keyword.operator.rlox" },
+				"4": { "patterns": [{ "include": "#lambda" }] },
+				"5": { "name": "keyword.operator.rlox" },
+				"6": { "patterns": [{ "include": "#lambda" }] }
+			}
+		},
+
+		"lambda": {
+			"match": "((fxn) \\((.+)?|(.+))",
+			"captures": {
+				"2": { "name": "keyword.other.rlox" },
+				"3": { "patterns": [{ "include": "#param_list" }] },
+				"4": { "patterns": [{ "include": "#binary" }] }
+			}
+		},
+
+		"binary": {
+			"match": "((.+) (and|or|\\+|-|\\*|\\\\|==|<|>|<=|>=) )*(.+)",
+			"captures": {
+				"2": { "patterns": [{"include": "#unary" }] },
+				"3": { "name": "keyword.operator.rlox" },
+				"4": { "patterns": [{"include": "#unary" }] }
+			}
+		},
+
+		"unary": {
+			"match": "([!-]*)([^{]+)",
+			"captures": {
+				"1": { "name": "keyword.operator.rlox" },
+				"2": { "patterns": [
+					{"include": "#call_test" },
+					{"include": "#primary" }
+				]}
+			}
+		},
+
+		"call_test": {
+			"match": "([a-zA-Z_][\\w]*)\\((.*)",
+			"captures": {
+				"1": { "name": "entity.name.function.rlox" },
+				"2": { "patterns": [{"include": "#arg_list" }] }
+			}
+		},
+
+		"call": {
+			"match": "([a-zA-Z_][\\w]*)\\((.*)?",
+			"captures": {
+				"1": { "name": "entity.name.function.rlox" },
+				"2": { "patterns": [{"include": "#arg_list" }] }
+			}
+		},
+
+		"primary": {
+			"patterns" : [
+				{ "include": "#primary_string_dbl" },
+				{ "include": "#primary_number" },
+				{ "include": "#primary_constants" },
+				{ "include": "#primary_identifier" },
+				{ "include": "#primary_reserved" }
+			]
+		},
+
+		"primary_string_dbl": {
+			"match": "\".*\"",
+			"name": "string.quoted.double.rlox"
+		},
+
+		"primary_number": {
+			"match": "[0-9]+(.[0-9]+)?",
+			"name": "constant.numeric.rlox"
+		},
+
+		"primary_constants": {
+			"match": "(true|false|nil)",
+			"name": "constant.language.rlox"
+		},
+
+		"primary_reserved": {
+			"match": "(super|this)",
+			"name": "keyword.other.rlox"
+		},
+
+		"primary_identifier": {
+			"patterns": [{
+				"name": "variable.other.rlox",
+				"match": "[a-zA-Z_][\\w]*"
+			}]
+		},
+
+		"arg_list": {
+			"match": "([^{]+)(, ([^{]+))*",
+			"captures": {
+				"1": { "patterns": [{"include": "#expression" }] },
+				"3": { "patterns": [{"include": "#expression" }] }
+			}
+		},
+
+		"param_list": {
+			"match": "([a-zA-Z_][\\w]*)(, ([a-zA-Z_][\\w]*))*",
+			"captures": {
+				"1": { "name": "variable.parameter.rlox" },
+				"3": { "name": "variable.parameter.rlox" }
+			}
+		}
+
+
+	},
+	"scopeName": "source.rlox"
+}
