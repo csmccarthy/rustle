@@ -1,7 +1,7 @@
 
 
 use crate::scanner::{ Tokens, Literal as LiteralValue };
-use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, AssignmentTarget, This };
+use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, AssignmentTarget, This, Super };
 // use std::collections::HashMap;
 use crate::environment::{ Environment };
 // use crate::stmts::{ FunStmt };
@@ -22,6 +22,8 @@ pub enum RuntimeError {
 	InvalidAccessor(LiteralValue),
 	InvalidLValue(LiteralValue),
 	MismatchedArguments(usize, usize),
+	InvalidSuperClass(LiteralValue),
+	BaseClass,
 	Return(LiteralValue),
 	Break,
 	Continue,
@@ -237,8 +239,8 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
 		let literal = expr.identifier.evaluate(self)?;
 		if let LiteralValue::Func(uid, opt) = literal {
 			return self.stack.call_fxn(&uid, &literal_args, opt);
-			// let record = map.get(&expr.identifier.lexeme);
-			// if let Some(uid) = record { return Ok(LiteralValue::Func(*uid)); }
+		} else if let LiteralValue::Class(_, constructor_uid) = literal {
+			return self.stack.call_fxn(&constructor_uid, &literal_args, None);
 		}
 		Err(RuntimeError::InvalidCallable(literal.clone()))
 	}
@@ -260,22 +262,14 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
 	fn visit_this(&mut self, _expr: &'parser This) -> RuntimeValue {
 		let expr = self.stack.get("this")?;
         Ok(expr)
-		// let literal = expr.object.evaluate(self)?;
-		// if let LiteralValue::Instance(_, ref uid) = literal {
-		// 	return Ok(self.stack.get_field(uid, &expr.identifier.lexeme))?;
-		// }
-		// Err(RuntimeError::InvalidAccessor(literal.clone()))
 	}
 
-	// fn visit_instantiation(&mut self, expr: &'parser Instantiation) -> RuntimeValue {
-	// 	let expr = self.stack.get("this")?;
-    //     Ok(expr)
-    //     // let uid = self.stack.instantiate(expr)?;
-    //     // Ok(LiteralValue::Instance(expr.name.lexeme.clone(), uid))
-	// 	// let literal = expr.object.evaluate(self)?;
-	// 	// if let LiteralValue::Instance(_, ref uid) = literal {
-	// 	// 	return Ok(self.stack.get_field(uid, &expr.identifier.lexeme))?;
-	// 	// }
-	// 	// Err(RuntimeError::InvalidAccessor(literal.clone()))
-	// }
+	fn visit_super(&mut self, expr: &'parser Super) -> RuntimeValue {
+		let class_lit = self.stack.get("super")?;
+		match class_lit {
+			LiteralValue::Class(uid, _) => Ok(self.stack.get_class_fxn(&uid, &expr.identifier.lexeme)?),
+			_ => Err(RuntimeError::BaseClass)
+		}
+        // Ok(expr)
+	}
 }

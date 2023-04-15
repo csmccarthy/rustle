@@ -1,31 +1,40 @@
 use crate::declarator::ASTDeclarator;
 use crate::evaluator::{ RuntimeError, RuntimeResult, RuntimeValue };
-// use crate::exprs::Instantiation;
-// use crate::exprs::Lambda;
 use crate::scanner::{Literal, Token};
 use crate::stmts::{ FunStmt, FunStmtAux, InstantiationStmt };
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::collections::HashMap;
-use std::sync::{ RwLock };
+use std::collections::{ HashMap };
+use std::cell::RefCell;
 use std::rc::Rc;
-// use std::sync::Arc;
 
 static GLOBAL_FXN_ID: AtomicUsize = AtomicUsize::new(0);
+static GLOBAL_CLASS_ID: AtomicUsize = AtomicUsize::new(0);
 static GLOBAL_INSTANCE_ID: AtomicUsize = AtomicUsize::new(0);
 
-type FunctionStore = HashMap<usize, FunStmt>;
-type RcLockedFunctionStore = Rc<RwLock<FunctionStore>>;
+pub type FxnUID = usize;
+pub type ClassUID = usize;
+pub type InstanceUID = usize;
+
+type FunctionStore = HashMap<FxnUID, FunStmt>;
+type RcLockedFunctionStore = Rc<RefCell<FunctionStore>>;
 
 pub type PropertyStore = HashMap<String, Literal>;
-type InstanceStore = HashMap<usize, PropertyStore>;
-type RcLockedInstanceStore = Rc<RwLock<InstanceStore>>;
+type InstanceStore = HashMap<InstanceUID, PropertyStore>;
+type RcLockedInstanceStore = Rc<RefCell<InstanceStore>>;
+
+type MethodStore = HashMap<ClassUID, HashMap<String, usize>>;
+type RcLockedMethodStore = Rc<RefCell<MethodStore>>;
+
+type Hierarchy = HashMap<ClassUID, ClassUID>;
+type RcLockedHierarchy = Rc<RefCell<Hierarchy>>;
 
 pub struct Environment {
     stack: Vec<HashMap<String, Literal>>,
     functions: RcLockedFunctionStore,
+    class_methods: RcLockedMethodStore,
     instances: RcLockedInstanceStore,
-    // lambdas: Rc<RwLock<HashMap<usize, Lambda>>>,
+    hierarchy: RcLockedHierarchy,
 }
 
 
@@ -39,6 +48,8 @@ impl Environment {
             stack,
             functions: RcLockedFunctionStore::default(),
             instances: RcLockedInstanceStore::default(),
+            class_methods: RcLockedMethodStore::default(),
+            hierarchy: RcLockedHierarchy::default(),
         }
     }
 
@@ -57,18 +68,42 @@ impl Environment {
     }
 
     pub fn assign_instance(&mut self, uid: &usize, name: String, val: Literal) -> RuntimeResult<()> {
-        let mut unlocked = self.instances.write().unwrap();
+        let mut unlocked = self.instances.borrow_mut();
         let inst = unlocked.get_mut(uid).unwrap();
         inst.insert(name, val);
         Ok(())
     }
 
+    pub fn add_generation(&mut self, class_uid: &ClassUID, super_uid: &ClassUID) {
+        let mut unlocked = self.hierarchy.borrow_mut();
+        unlocked.insert(*class_uid, *super_uid);
+    }
+
     pub fn get_field(&mut self, uid: &usize, name: &str) -> RuntimeResult<Literal> {
-        let unlocked = self.instances.read().unwrap();
+        let unlocked = self.instances.borrow();
         let inst = unlocked.get(uid).unwrap();
         match inst.get(name) {
             Some(lit) => Ok(lit.clone()),
             None => Ok(Literal::Nil),
+        }
+    }
+
+    pub fn assign_methods(&mut self, method_set: HashMap<String, FxnUID>) -> usize {
+        let class_uid: usize = GLOBAL_CLASS_ID.fetch_add(1, Ordering::SeqCst).into();
+        self.class_methods.borrow_mut().insert(class_uid, method_set);
+        class_uid
+    }
+
+    pub fn inherit_methods(&self, super_uid: &usize, prop_store: &mut PropertyStore) {
+        let method_store = self.class_methods.borrow();
+        let mut super_uid = Some(*super_uid);
+        while let Some(uid) = super_uid {
+            let super_methods = method_store.get(&uid).unwrap();
+            for method_tup in super_methods {
+                prop_store.insert(method_tup.0.clone(), Literal::Func(*method_tup.1, None));
+            }
+            let unlocked = self.hierarchy.borrow();
+            super_uid = unlocked.get(&uid).copied();
         }
     }
     
@@ -82,23 +117,33 @@ impl Environment {
                 x => bound_props.insert(name, x.clone()),
             };
         }
-        self.instances.write().unwrap().insert(inst_uid, bound_props);
-        let unlocked = self.instances.read().unwrap();
+        self.instances.borrow_mut().insert(inst_uid, bound_props);
+        self.run_user_constructor(inst_uid)?;
+        Ok(inst_uid)
+    }
+
+    fn run_user_constructor(&mut self, inst_uid: usize) -> RuntimeResult<()> {
+        let unlocked = self.instances.borrow();
         let inst = unlocked.get(&inst_uid).unwrap();
         if let Some(lit) = inst.get("init") {
             let mut args = Vec::new();
             for arg in self.stack.get(self.stack.len() - 2).unwrap().values() {
                 args.push(arg.clone());
             }
-            // println!("{}", args.len());
             let lit = lit.clone();
             drop(unlocked);
             match lit {
-                Literal::Func(fxn_uid, inst_opt) => { self.call_fxn(&fxn_uid, &args, inst_opt)?; },
+                Literal::Func(fxn_uid, inst_opt) => {
+                    match self.call_fxn(&fxn_uid, &args, inst_opt) {
+                        Err(RuntimeError::Return(_)) => (),
+                        Err(e) => return Err(e),
+                        _ => ()
+                    }
+                },
                 _ => return Err(RuntimeError::InvalidCallable(lit.clone())),
             }
         }
-        Ok(inst_uid)
+        Ok(())
     }
 
     fn current_scope_mut(&mut self) -> &mut HashMap<String, Literal> {
@@ -142,7 +187,7 @@ impl Environment {
     }
 
     pub fn get_params(&self, uid: &usize) -> RuntimeResult<Vec<Token>> {
-        let unlocked_fxn = self.functions.read().unwrap();
+        let unlocked_fxn = self.functions.borrow();
         let fxn_opt = unlocked_fxn.get(uid);
         let fxn = match fxn_opt {
             None => { return Err(RuntimeError::UndefinedFunction(String::from(""))) }, // TODO: give called token
@@ -158,8 +203,17 @@ impl Environment {
         let mut fxn_clone = fxn.clone();
         let closure = self.clone();
         fxn_clone.closure = Some(closure);
-        self.functions.write().unwrap().insert(fxn_uid, fxn_clone);
+        self.functions.borrow_mut().insert(fxn_uid, fxn_clone);
         fxn_uid
+    }
+
+    pub fn get_class_fxn(&self, super_uid: &ClassUID, name: &str) -> RuntimeValue {
+        let method_store = self.class_methods.borrow();
+        let super_methods = method_store.get(super_uid).unwrap();
+        match super_methods.get(name) {
+            Some(uid) => Ok(Literal::Func(*uid, None)),
+            None => Err(RuntimeError::InvalidCallable(Literal::Nil)) // TODO: Fix this
+        }
     }
 
     fn call_fxn_block(&mut self, args: &Vec<Literal>, fxn_aux: &mut Rc<FunStmtAux>, opt: Option<usize>) -> RuntimeValue {
@@ -189,7 +243,7 @@ impl Environment {
     }
 
     pub fn call_fxn(&mut self, uid: &usize, args: &Vec<Literal>, opt: Option<usize>) -> RuntimeValue {
-        let unlocked_fxn = self.functions.read().unwrap();
+        let unlocked_fxn = self.functions.borrow();
         let fxn_opt = unlocked_fxn.get(uid);
         let fxn = match fxn_opt {
             None => { return Err(RuntimeError::UndefinedFunction(String::from(""))) }, // TODO: give called token
@@ -216,6 +270,8 @@ impl Clone for Environment {
             stack: self.stack.clone(),
             functions: self.functions.clone(),
             instances: self.instances.clone(),
+            class_methods: self.class_methods.clone(),
+            hierarchy: self.hierarchy.clone(),
         }
     }
 }

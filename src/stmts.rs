@@ -431,12 +431,14 @@ impl Analyzed for ContinueStmt {
 
 pub struct ClassStmt {
 	pub name: Token,
+	pub super_expr: Option<Box<dyn Expr>>,
+	pub super_name: Option<Token>,
 	pub methods: Vec<FunStmt>,
 }
 
 impl ClassStmt {
-	pub fn boxed_new(name: Token, methods: Vec<FunStmt>) -> Box<ClassStmt> {
-		Box::new(ClassStmt { name, methods })
+	pub fn boxed_new(name: Token, super_expr: Option<Box<dyn Expr>>, super_name: Option<Token>, methods: Vec<FunStmt>) -> Box<ClassStmt> {
+		Box::new(ClassStmt { name, super_expr, super_name, methods })
 	}
 }
 

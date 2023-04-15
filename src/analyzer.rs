@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 // use crate::evaluator::RuntimeResult;
 use crate::stmts::{ Stmt, StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt, ClassStmt, InstantiationStmt };
-use crate::exprs::{ Expr, ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, This };
+use crate::exprs::{ Expr, ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, This, Super };
 
 #[derive(Debug)]
 pub enum SemanticError {
@@ -13,7 +13,9 @@ pub enum SemanticError {
     RedeclaredVariable,
     UnusedVariable,
     ThisOutsideClass,
+    SuperOutsideClass,
     NonGlobalClass,
+    CyclicSuperclass,
 }
 
 #[derive(Clone)]
@@ -220,6 +222,14 @@ impl<'parser> StmtVisitor<'parser, SemanticResult> for ASTAnalyzer {
         }
         self.declare(stmt.name.lexeme.clone())?;
         self.define(stmt.name.lexeme.clone());
+
+        if let Some(ref var) = &stmt.super_expr {
+            if stmt.name.lexeme == stmt.super_name.as_ref().unwrap().lexeme {
+                return Err(SemanticError::CyclicSuperclass);
+            }
+            self.resolve_expr(var)?;
+        }
+
         self.nest();
         self.define(String::from("this"));
         for method in &stmt.methods {
@@ -326,12 +336,13 @@ impl<'parser> ExprVisitor<'parser, SemanticResult> for ASTAnalyzer {
         Ok(())
     }
 
-    // fn visit_instantiation<'evaluator>(&'evaluator mut self, expr: &'parser crate::exprs::Instantiation) -> SemanticResult {
-    //     // self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
-    //     // self.resolve_local(expr, String::from("this"));
-    //     // if !matches!(self.fxn_type, FunctionType::Method) {
-    //     //     return Err(SemanticError::ThisOutsideClass);
-    //     // }
-    //     Ok(())
-    // }
+    fn visit_super<'evaluator>(&'evaluator mut self, expr: &'parser Super) -> SemanticResult {
+        // self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
+        self.resolve_local(expr, String::from("super"));
+        if !matches!(self.fxn_type, FunctionType::Method) {
+            return Err(SemanticError::SuperOutsideClass);
+        }
+        Ok(())
+    }
+
 }

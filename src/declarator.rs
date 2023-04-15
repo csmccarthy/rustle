@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{ HashMap };
 
 // use crate::exprs::{Instantiation, Variable, Call};
 use crate::scanner::Literal;
@@ -135,10 +135,29 @@ impl<'parser> StmtVisitor<'parser, RuntimeDeclaration> for ASTDeclarator<'parser
 
 	fn visit_class(&mut self, stmt: &'parser ClassStmt) -> RuntimeDeclaration {
         let mut prop_map: PropertyStore = HashMap::new();
+
+        let mut super_uid_opt: Option<usize> = None;
+        if let Some(super_expr) = &stmt.super_expr {
+            let mut eval = ASTEvaluator::new(self.stack);
+            let super_lit = super_expr.evaluate(&mut eval)?;
+            match super_lit {
+                Literal::Class(uid, idx) => {
+                    super_uid_opt = Some(uid);
+                    self.stack.inherit_methods(&uid, &mut prop_map);
+                    self.stack.define(String::from("super"), Literal::Class(uid, idx))?;
+                },
+                lit => return Err(RuntimeError::InvalidSuperClass(lit.clone())),
+            }
+        }
+
+        let mut method_idx_set = HashMap::new();
         for method in &stmt.methods {
             let idx = self.stack.store_fxn(method);
+            method_idx_set.insert(method.aux.name.lexeme.clone(), idx);
             prop_map.insert(method.aux.name.lexeme.clone(), Literal::Func(idx, None));
         }
+        let class_uid = self.stack.assign_methods(method_idx_set);
+
         let mut stmts: Vec<Box<dyn Stmt>> = Vec::new();
 
         let mut params = Vec::new();
@@ -156,7 +175,9 @@ impl<'parser> StmtVisitor<'parser, RuntimeDeclaration> for ASTDeclarator<'parser
 
         let block = BlockStmt::boxed_new(stmts);
         let constructor_fxn = FunStmt::new(stmt.name.clone(), params, block);
-        self.stack.store_fxn(&constructor_fxn);
+        let constructor_uid = self.stack.store_fxn(&constructor_fxn);
+        self.stack.define(stmt.name.lexeme.clone(), Literal::Class(class_uid, constructor_uid))?;
+        if let Some(super_uid) = super_uid_opt { self.stack.add_generation(&class_uid, &super_uid); }
         Ok(())
     }
 

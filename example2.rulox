@@ -1,37 +1,34 @@
 
-class Example {
-    fxn init(field) {
-        this.field = field;
-    }
-
-    fxn print_me() {
-        return fxn (a) {
-            print this;
-        };
-    }
-
-    fxn test_init() {
-        print this.field;
+class A {
+    fxn a() {
+        print "a";
     }
 }
 
-fxn printer() {
-    print "heh";
+class B < A {
+    fxn a() {
+        print "b";
+    }
+
+    fxn example() {
+        super.a();
+    }
 }
 
-print Example;
-print Example("0");
-print printer;
-printer();
-// Example("1").print_me()("hi");
-Example("2").print_me();
-// Example("3").print_me() = "error";
+class C < B {
+    fxn c() {
+        print "c";
+    }
+}
 
-var a = Example("hi");
-a.test_init();
+// class MyClass < SuperClass {
+//     fxn print_me() {
+//         super.print_me();
+//     }
+// }
 
-a.field = "stored it :)";
-print a.field;
-a.field = "new value :o";
-print a.field;
-a.test_init();
+var inst = C();
+inst.example();
+// inst.b();
+// inst.c();
+// print inst.field;

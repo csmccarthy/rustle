@@ -1,3 +1,4 @@
+use crate::environment::{InstanceUID, FxnUID, ClassUID};
 use crate::error_reporter::ErrorReporter;
 // use crate::stmts::FunStmt;
 
@@ -74,8 +75,8 @@ const CAPS: RangeInclusive<char> = RangeInclusive::new('A', 'Z');
 const LOWERS: RangeInclusive<char> = RangeInclusive::new('a', 'z');
 const NUMS: RangeInclusive<char> = RangeInclusive::new('0', '9');
 
-type FxnUID = usize;
-type InstanceUID = usize;
+// type FxnUID = usize;
+// type InstanceUID = usize;
 
 // These can't hold -any- mutable state in them. Only values with copy semantics
 #[derive(Clone)]
@@ -84,7 +85,7 @@ pub enum Literal {
     Str(String),
     Bool(bool),
     Func(FxnUID, Option<InstanceUID>),
-    // Class(String),
+    Class(ClassUID, FxnUID),
     Instance(String, InstanceUID),
     Nil,
 }
@@ -102,7 +103,7 @@ impl std::fmt::Debug for Literal {
                     write!(f, "fn(), vtable idx {}", &idx)
                 }
             },
-            // Literal::Class(str) => write!(f, "class {}", &str),
+            Literal::Class(uid, constructor_uid) => write!(f, "class {}, constructor vindex: {}", &uid, &constructor_uid),
             Literal::Instance(str, idx) => { write!(f, "instance {}, vtable idx {}", &str, idx) },
             Literal::Nil => write!(f, "()"),
         }
@@ -122,7 +123,7 @@ impl Display for Literal {
                     write!(f, "fn(), vtable idx {}", &idx)
                 }
             },
-            // Literal::Class(str) => write!(f, "class {}", &str),
+            Literal::Class(uid, constructor_uid) => write!(f, "class {}, constructor vindex: {}", &uid, &constructor_uid),
             Literal::Instance(str, idx) => { write!(f, "instance {}, vtable idx {}", &str, idx) },
             Literal::Nil => write!(f, "()"),
         }

@@ -24,6 +24,7 @@ pub trait ExprVisitor<'parser, R> {
 	fn visit_lambda<'evaluator>(&'evaluator mut self, expr: &'parser Lambda) -> R;
 	fn visit_property<'evaluator>(&'evaluator mut self, expr: &'parser Property) -> R;
 	fn visit_this<'evaluator>(&'evaluator mut self, expr: &'parser This) -> R;
+	fn visit_super<'evaluator>(&'evaluator mut self, expr: &'parser Super) -> R;
 	// fn visit_instantiation<'evaluator>(&'evaluator mut self, expr: &'parser Instantiation) -> R;
 }
 
@@ -267,8 +268,12 @@ pub struct Variable {
 }
 
 impl Variable {
+	pub fn new(identifier: Token) -> Variable {
+		Variable { identifier }
+	}
+
 	pub fn boxed_new(identifier: Token) -> Box<Variable> {
-		Box::new(Variable { identifier })
+		Box::new(Variable::new(identifier))
 	}
 }
 
@@ -536,38 +541,39 @@ impl Display for This {
 }
 
 
-// pub struct Instantiation {
-// 	pub name: Token,
-// 	pub properties: PropertyStore,
-// }
+pub struct Super {
+	pub identifier: Token,
+}
 
-// impl Instantiation {
-// 	pub fn boxed_new(name: Token, properties: PropertyStore) -> Box<Instantiation> {
-// 		Box::new(Instantiation { name, properties })
-// 	}
-// }
+impl Super {
+	pub fn boxed_new(identifier: Token) -> Box<Super> {
+		Box::new(Super { identifier })
+	}
+}
 
-// impl Expr for Instantiation {}
+impl Expr for Super {}
 
-// impl Analyzed for Instantiation {
-// 	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
-// 		visitor.visit_instantiation(self)
-// 	}
-// }
+impl Analyzed for Super {
+	fn accept<'analyzer, 'parser>(&'parser self, visitor: &'analyzer mut ASTAnalyzer) -> SemanticResult {
+		visitor.visit_super(self)
+	}
+}
 
-// impl Assignable for Instantiation {
-// 	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
-// }
+impl Assignable for Super {
+	fn assignment_target(&self) -> Option<AssignmentTarget> { None }
+}
 
-// impl Evaluable for Instantiation {
-// 	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
-// 		visitor.visit_instantiation(self)
-// 	}
-// }
+impl Evaluable for Super {
+	fn evaluate<'evaluator, 'declarator, 'parser>(&'parser self, visitor: &'evaluator mut ASTEvaluator<'declarator>) -> RuntimeValue {
+		visitor.visit_super(self)
+	}
+}
 
-// impl Display for Instantiation {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-// 		write!(f, "constructor {}", self.name.lexeme)
-//     }
-// }
+impl Display for Super {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "var {}", self.identifier.lexeme)
+    }
+}
+
+
 

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, This };
+use crate::exprs::{ Expr, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, This, Super };
 use crate::stmts::{ Stmt, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt, ClassStmt };
 use crate::scanner::{ Token, Tokens, Literal as LiteralValue };
 
@@ -224,6 +224,18 @@ impl Parser {
             }
             Some(_) => return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
         };
+        let mut super_var: Option<Box<dyn Expr>> = None;
+        let mut super_name: Option<Token> = None;
+        if self.match_token(Tokens::Less) {
+            match self.advance() {
+                None => return Err(SyntaxError::EOFReached),
+                Some(tk) if tk.token_type == Tokens::Identifier => {
+                    super_var = Some(Variable::boxed_new(tk.clone()));
+                    super_name = Some(tk.clone());
+                }
+                Some(_) => return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
+            };
+        }
         if !self.match_token(Tokens::LeftBrace) {
             return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
         }
@@ -235,7 +247,7 @@ impl Parser {
         if !self.match_token(Tokens::RightBrace) {
             return Err(SyntaxError::UnexpectedToken(self.previous().unwrap().clone(), Vec::new()))
         }
-        Ok(ClassStmt::boxed_new(name, fxns))
+        Ok(ClassStmt::boxed_new(name, super_var, super_name, fxns))
     }
 
     fn var_decl(&mut self) -> ParseResult<Box<dyn Stmt>> {
@@ -287,11 +299,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> ParseResult<Box<dyn Expr>> {
-        let expr = match self.chain_expr() {
-            Err(SyntaxError::NotChainable) => return Ok(self.ternary()?),
-            Err(e) => return Err(e),
-            Ok(tup) => tup.1,
-        };
+        let expr = self.ternary()?;
         if self.match_token(Tokens::Assign) {
             if let None = expr.assignment_target() {
                 return Err(SyntaxError::NotLValue(expr));
@@ -363,7 +371,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn equality(&mut self) -> ParseResult<Box<dyn Expr>> {
+    fn equality(&mut self) -> ParseResult<Box<dyn Expr>> { // TODO: Make these just binary tokens
         self.parse_binary(|s| { s.comparison() }, Vec::from(EQUALITY_TOKENS))
     }
 
@@ -383,7 +391,7 @@ impl Parser {
     where F: Fn(&mut Parser) -> ParseResult<Box<dyn Expr>>
     {
         let mut expr = base_expr_cb(self)?;
-        while self.match_token_vec(&tokens) {
+        if self.match_token_vec(&tokens) {
             let operator = self.previous().unwrap().clone();
             let right = base_expr_cb(self)?;
             expr = Binary::boxed_new(expr, operator, right);
@@ -426,10 +434,9 @@ impl Parser {
     }
 
     fn chain_expr(&mut self) -> ParseResult<(ChainType, Box<dyn Expr>)> {
-        // let mut expr = self.primary()?;
         let mut chain_type = ChainType::Primary;
         let identifier = match self.peek() {
-            Some(tk) if tk.token_type == Tokens::Identifier || tk.token_type == Tokens::This => {
+            Some(tk) if tk.token_type == Tokens::Identifier || tk.token_type == Tokens::This || tk.token_type == Tokens::Super => {
                 Some(tk.clone())
             },
             _ => return Err(SyntaxError::NotChainable)
@@ -485,6 +492,16 @@ impl Parser {
         }
         else if self.match_token(Tokens::This) {
             return Ok(This::boxed_new(self.previous().unwrap().clone()));
+        }
+        else if self.match_token(Tokens::Super) {
+            if !self.match_token(Tokens::Period) {
+                return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()));
+            }
+            if !self.match_token(Tokens::Identifier) {
+                return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()));
+            }
+            println!("returned");
+            return Ok(Super::boxed_new(self.previous().unwrap().clone()));
         }
         else if self.match_token(Tokens::EOF) {
             return Err(SyntaxError::EOFReached);
