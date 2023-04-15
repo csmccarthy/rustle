@@ -1,13 +1,10 @@
-// use crate::environment::PropertyStore;
+
 use crate::scanner::{ Token, Literal as LiteralValue };
 use crate::evaluator::{ ASTEvaluator, RuntimeValue };
-// use crate::declarator::{ RuntimeDeclaration };
 use crate::stmts::{ Stmt, FunStmt };
 use crate::analyzer::{ ASTAnalyzer, Analyzed, SemanticResult };
-// use crate::stmts::StmtVisitor;
+
 use std::fmt::Display;
-// use std::rc::{ Rc };
-// use std::hash::{ Hash, Hasher };
 
 
 pub trait ExprVisitor<'parser, R> {
@@ -25,7 +22,6 @@ pub trait ExprVisitor<'parser, R> {
 	fn visit_property<'evaluator>(&'evaluator mut self, expr: &'parser Property) -> R;
 	fn visit_this<'evaluator>(&'evaluator mut self, expr: &'parser This) -> R;
 	fn visit_super<'evaluator>(&'evaluator mut self, expr: &'parser Super) -> R;
-	// fn visit_instantiation<'evaluator>(&'evaluator mut self, expr: &'parser Instantiation) -> R;
 }
 
 pub trait Evaluable {

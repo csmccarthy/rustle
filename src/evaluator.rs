@@ -1,12 +1,7 @@
 
-
 use crate::scanner::{ Tokens, Literal as LiteralValue };
 use crate::exprs::{ ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, AssignmentTarget, This, Super };
-// use std::collections::HashMap;
 use crate::environment::{ Environment };
-// use crate::stmts::{ FunStmt };
-
-// use std::sync::atomic::{ Ordering };
 
 
 #[derive(Debug)]
@@ -246,7 +241,6 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
 	}
 
 	fn visit_lambda(&mut self, expr: &'parser Lambda) -> RuntimeValue {
-		// let fxn = expr.clone();
         let fxn_uid = self.stack.store_fxn(&expr.stmt);
         Ok(LiteralValue::Func(fxn_uid, None))
 	}
@@ -270,6 +264,5 @@ impl<'declarator, 'parser> ExprVisitor<'parser, RuntimeValue> for ASTEvaluator<'
 			LiteralValue::Class(uid, _) => Ok(self.stack.get_class_fxn(&uid, &expr.identifier.lexeme)?),
 			_ => Err(RuntimeError::BaseClass)
 		}
-        // Ok(expr)
 	}
 }

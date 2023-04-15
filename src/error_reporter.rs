@@ -10,3 +10,5 @@ impl ErrorReporter {
     }
 
 }
+
+// TODO: Expand this functionality, tokens need to be beefed up with more info

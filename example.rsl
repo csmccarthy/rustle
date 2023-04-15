@@ -1,0 +1,88 @@
+
+fxn no_params() {
+    print "no params";
+}
+
+fxn call_it(a, b) {
+    return a(b);
+}
+
+no_params();
+print 500.500;
+
+call_it(fxn (a) {
+    print a;
+}, "passed arg");
+
+fxn test() {
+    return fxn (a) {
+        print a;
+    };
+}
+
+// Comment here
+
+var printer = test();
+
+printer("hey");
+printer("hi");
+
+var a;
+call_it;
+!false;
+
+var b = fxn () {};
+b = fxn (a) {};
+b = true ? true : false ? 1 : 0;
+
+while false and true {
+    print "";
+}
+
+if true {
+    print "true";
+} else {
+    print "false";
+}
+
+for var i = 0; i < 10; i = 10 {
+    print i;
+}
+
+print false == true;
+
+class ABC {}
+
+class Object < ABC {
+    fxn print_me() {
+        return fxn (a) {
+            print a;
+        };
+    }
+}
+
+class A {
+    fxn a() {
+        print "a";
+    }
+}
+
+class B < A {
+    fxn a() {
+        print "b";
+    }
+
+    fxn example() {
+        super.a();
+    }
+}
+
+class C < B {
+    fxn c() {
+        print "c";
+    }
+}
+
+
+var inst = C();
+inst.example();

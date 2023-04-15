@@ -11,7 +11,6 @@ mod declarator;
 mod environment;
 mod analyzer;
 
-
 use scanner::{ Scanner };
 use error_reporter::ErrorReporter;
 use declarator::{ ASTDeclarator };
@@ -69,7 +68,7 @@ fn run(line: String) { // Should use bytes instead of String
 
 
 fn main() {
-    let path = Path::new("example2.rulox");
+    let path = Path::new("example.rsl");
     let file = match File::open(&path) {
         Err(e) => panic!("Couldn't open {}: {}", path.display(), e),
         Ok(file) => file

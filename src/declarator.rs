@@ -1,13 +1,10 @@
-use std::collections::{ HashMap };
 
-// use crate::exprs::{Instantiation, Variable, Call};
 use crate::scanner::Literal;
 use crate::stmts::{ Stmt, StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt, ClassStmt, InstantiationStmt };
-// use crate::exprs::{ Expr };
-// use crate::scanner::{ Literal };
 use crate::environment::{ Environment, PropertyStore };
 use crate::evaluator::{ ASTEvaluator, RuntimeResult, RuntimeError };
-// use std::collections::HashMap;
+
+use std::collections::{ HashMap };
 
 pub struct ASTDeclarator<'parser> {
     stack: &'parser mut Environment

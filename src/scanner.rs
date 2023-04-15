@@ -75,10 +75,7 @@ const CAPS: RangeInclusive<char> = RangeInclusive::new('A', 'Z');
 const LOWERS: RangeInclusive<char> = RangeInclusive::new('a', 'z');
 const NUMS: RangeInclusive<char> = RangeInclusive::new('0', '9');
 
-// type FxnUID = usize;
-// type InstanceUID = usize;
-
-// These can't hold -any- mutable state in them. Only values with copy semantics
+// These can't hold -any- mutable state in them. Only values with copy/clone semantics
 #[derive(Clone)]
 pub enum Literal {
     Num(f64),
@@ -224,7 +221,6 @@ impl Scanner {
             _ => { eprintln!("Attempting to add a literal for non-literal token type"); return }
         };
         let lexeme = self.get_source_range(0, 0);
-        // println!("{}", lexeme);
         let t = Token {
             token_type: token_enum, literal, lexeme, line: self.line,
         };
@@ -280,7 +276,6 @@ impl Scanner {
                     else { self.add_token_literal(Tokens::String, 1, 1); }
                 },
                 '/' => {
-                    // println!("Matching slash");
                     // Match a single line comment
                     if let Some(_) = self.advance_if_char('/') {
                         // println!("Matching comment");

@@ -6,7 +6,7 @@ use crate::scanner::{ Token, Tokens, Literal as LiteralValue };
 
 pub struct Parser {
     pub tokens: Vec<Token>,
-    current: u8,
+    current: u16,
     pub stmts: Vec<Box<dyn Stmt>>,
     pub errs: Vec<SyntaxError>,
 }
@@ -500,7 +500,6 @@ impl Parser {
             if !self.match_token(Tokens::Identifier) {
                 return Err(SyntaxError::UnexpectedToken(self.peek().unwrap().clone(), Vec::new()));
             }
-            println!("returned");
             return Ok(Super::boxed_new(self.previous().unwrap().clone()));
         }
         else if self.match_token(Tokens::EOF) {
@@ -566,12 +565,10 @@ impl Parser {
     }
 
     pub fn parse(&mut self) {
-        // if let None = self.peek() { self.errs.push(SyntaxError::EmptyFile); }
         while self.peek().is_some()
             && self.ignore_comments()
             && self.peek().unwrap().token_type != Tokens::EOF
         {
-            // println!("{:?}", self.peek().unwrap().token_type);
             let stmt_res = self.declaration();
             if let Err(mut e) = stmt_res {
                 self.sync(&mut e);

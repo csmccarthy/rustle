@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-// use crate::evaluator::RuntimeResult;
 use crate::stmts::{ Stmt, StmtVisitor, ExprStmt, Print, VarStmt, BlockStmt, IfStmt, WhileLoop, ForLoop, FunStmt, ReturnStmt, BreakStmt, ContinueStmt, ClassStmt, InstantiationStmt };
 use crate::exprs::{ Expr, ExprVisitor, Binary, Grouping, Literal, Unary, Ternary, Variable, Assign, OrExpr, AndExpr, Call, Lambda, Property, This, Super };
 
@@ -36,7 +35,6 @@ pub trait Analyzed {
 }
 
 pub struct ASTAnalyzer {
-    // warnings: Vec<String>,
     scopes: Vec<HashMap<String, VarState>>,
     fxn_type: FunctionType,
     in_loop: bool,
@@ -82,12 +80,6 @@ impl ASTAnalyzer {
     fn resolve_stmt(&mut self, stmt: &Box<dyn Stmt>) -> SemanticResult {
         stmt.accept(self)
     }
-    
-    // fn resolve_expr_vec(&mut self, exprs: &Vec<Box<dyn Expr>>) {
-    //     for expr in exprs {
-    //         self.resolve_expr(expr);
-    //     }
-    // }
 
     fn resolve_expr(&mut self, expr: &Box<dyn Expr>) -> SemanticResult {
         expr.accept(self)
@@ -145,7 +137,6 @@ impl<'parser> StmtVisitor<'parser, SemanticResult> for ASTAnalyzer {
         self.nest();
         self.resolve_stmt_vec(&stmt.stmts)?;
         for tup in self.scopes.get(self.scopes.len() - 1).unwrap().iter() {
-            // println!("{}: {}", tup.0, matches!(tup.1, &VarState::Accessed));
             if !matches!(tup.1, &VarState::Accessed) {
                 return Err(SemanticError::UnusedVariable)
             }
@@ -323,12 +314,10 @@ impl<'parser> ExprVisitor<'parser, SemanticResult> for ASTAnalyzer {
     }
 
     fn visit_property<'evaluator>(&'evaluator mut self, expr: &'parser Property) -> SemanticResult {
-        // self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
         self.resolve_expr(&expr.object)
     }
 
     fn visit_this<'evaluator>(&'evaluator mut self, expr: &'parser This) -> SemanticResult {
-        // self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
         self.resolve_local(expr, String::from("this"));
         if !matches!(self.fxn_type, FunctionType::Method) {
             return Err(SemanticError::ThisOutsideClass);
@@ -337,7 +326,6 @@ impl<'parser> ExprVisitor<'parser, SemanticResult> for ASTAnalyzer {
     }
 
     fn visit_super<'evaluator>(&'evaluator mut self, expr: &'parser Super) -> SemanticResult {
-        // self.resolve_fxn(&expr.stmt, FunctionType::Function)?;
         self.resolve_local(expr, String::from("super"));
         if !matches!(self.fxn_type, FunctionType::Method) {
             return Err(SemanticError::SuperOutsideClass);
