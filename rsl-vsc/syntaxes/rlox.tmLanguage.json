@@ -1,6 +1,6 @@
 {
 	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-	"name": "RLox",
+	"name": "Rsl",
 	"patterns": [{ "include": "#declaration" }],
 	"repository": {
 		"declaration": {
@@ -21,28 +21,28 @@
 		"comment_line": {
 			"match": "(//.*)",
 			"captures": {
-				"1": { "name": "comment.line.rlox" }
+				"1": { "name": "comment.line.rsl" }
 			}
 		},
 		"class_declaration": {
 			"match": "(class) ([a-zA-Z_]\\w*)( < ([a-zA-Z_]\\w*))?",
 			"captures": {
-				"1": { "name": "keyword.other.rlox" },
-				"2": { "name": "entity.name.class.rlox" },
-				"4": { "name": "entity.name.class.rlox" }
+				"1": { "name": "keyword.other.rsl" },
+				"2": { "name": "entity.name.class.rsl" },
+				"4": { "name": "entity.name.class.rsl" }
 			}
 		},
 		"var_declaration": {
 			"match": "(var) ([a-zA-Z_]\\w*)",
 			"captures": {
-				"1": { "name": "keyword.other.rlox" },
-				"2": { "name": "variable.other.rlox" }
+				"1": { "name": "keyword.other.rsl" },
+				"2": { "name": "variable.other.rsl" }
 			}
 		},
 		"var_definition": {
 			"match": "(var) (.+)",
 			"captures": {
-				"1": { "name": "keyword.other.rlox" },
+				"1": { "name": "keyword.other.rsl" },
 				"2": {
 					"patterns": [
 						{ "include": "#assignment" }
@@ -53,8 +53,8 @@
 		"fxn_declaration": {
 			"match": "(fxn) ?([a-zA-Z_][\\w]*)(\\((.*)\\))?",
 			"captures": {
-				"1": { "name": "keyword.other.rlox" },
-				"2": { "name": "entity.name.function.rlox" },
+				"1": { "name": "keyword.other.rsl" },
+				"2": { "name": "entity.name.function.rsl" },
 				"4": { "patterns": [{ "include": "#param_list" }] }
 			}
 		},
@@ -74,21 +74,21 @@
 		"break_statement": {
 			"match": "(break)\\b",
 			"captures": {
-				"1": { "name": "keyword.control.rlox" }
+				"1": { "name": "keyword.control.rsl" }
 			}
 		},
 
 		"continue_statement": {
 			"match": "(continue)\\b",
 			"captures": {
-				"1": { "name": "keyword.control.rlox" }
+				"1": { "name": "keyword.control.rsl" }
 			}
 		},
 
 		"return_statement": {
 			"match": "(return)\\b( ([^{]+)?)?",
 			"captures": {
-				"1": { "name": "keyword.control.rlox" },
+				"1": { "name": "keyword.control.rsl" },
 				"3": { "patterns": [{ "include": "#expression" }] }
 			}
 		},
@@ -96,7 +96,7 @@
 		"print_statement": {
 			"match": "(print)\\b( ([^{]+)?)?",
 			"captures": {
-				"1": { "name": "keyword.control.rlox" },
+				"1": { "name": "keyword.control.rsl" },
 				"3": { "patterns": [{ "include": "#expression" }] }
 			}
 		},
@@ -104,16 +104,16 @@
 		"if_statement": {
 			"match": "((if|else if) ([^{]+)|((} ?)?(else)))",
 			"captures": {
-				"2": { "name": "keyword.control.rlox" },
+				"2": { "name": "keyword.control.rsl" },
 				"3": { "patterns": [{ "include": "#expression" }] },
-				"6": { "name": "keyword.control.rlox" }
+				"6": { "name": "keyword.control.rsl" }
 			}
 		},
 
 		"while_loop": {
 			"match": "(while)( ([^{]+))? ?",
 			"captures": {
-				"1": { "name": "keyword.control.rlox" },
+				"1": { "name": "keyword.control.rsl" },
 				"2": { "patterns": [{ "include": "#expression" }] }
 			}
 		},
@@ -121,8 +121,8 @@
 		"for_loop": {
 			"match": "(for)( ((var) )?(.+)?(;? ?(.+)?)?; ?(.+)?)?",
 			"captures": {
-				"1": { "name": "keyword.control.rlox" },
-				"4": { "name": "keyword.other.rlox" },
+				"1": { "name": "keyword.control.rsl" },
+				"4": { "name": "keyword.other.rsl" },
 				"5": {
 					"patterns": [
 						{ "include": "#assignment" }
@@ -147,7 +147,7 @@
 			"match": "(.+) ?(=) ?(.+)",
 			"captures": {
 				"1": { "patterns": [{ "include": "#ternary" }] },
-				"2": { "name": "keyword.operator.rlox" },
+				"2": { "name": "keyword.operator.rsl" },
 				"3": { "patterns": [{ "include": "#ternary" }] }
 			}
 		},
@@ -156,9 +156,9 @@
 			"match": "(.+)( ?(\\?) ?(.+) ?(:) ? (.+))*",
 			"captures": {
 				"1": { "patterns": [{ "include": "#lambda" }] },
-				"3": { "name": "keyword.operator.rlox" },
+				"3": { "name": "keyword.operator.rsl" },
 				"4": { "patterns": [{ "include": "#lambda" }] },
-				"5": { "name": "keyword.operator.rlox" },
+				"5": { "name": "keyword.operator.rsl" },
 				"6": { "patterns": [{ "include": "#lambda" }] }
 			}
 		},
@@ -166,7 +166,7 @@
 		"lambda": {
 			"match": "((fxn) \\((.+)?|(.+))",
 			"captures": {
-				"2": { "name": "keyword.other.rlox" },
+				"2": { "name": "keyword.other.rsl" },
 				"3": { "patterns": [{ "include": "#param_list" }] },
 				"4": { "patterns": [{ "include": "#binary" }] }
 			}
@@ -176,7 +176,7 @@
 			"match": "((.+) (and|or|\\+|-|\\*|\\\\|==|<|>|<=|>=) )*(.+)",
 			"captures": {
 				"2": { "patterns": [{"include": "#unary" }] },
-				"3": { "name": "keyword.operator.rlox" },
+				"3": { "name": "keyword.operator.rsl" },
 				"4": { "patterns": [{"include": "#unary" }] }
 			}
 		},
@@ -184,7 +184,7 @@
 		"unary": {
 			"match": "([!-]*)([^{]+)",
 			"captures": {
-				"1": { "name": "keyword.operator.rlox" },
+				"1": { "name": "keyword.operator.rsl" },
 				"2": { "patterns": [
 					{"include": "#call_test" },
 					{"include": "#primary" }
@@ -195,7 +195,7 @@
 		"call_test": {
 			"match": "([a-zA-Z_][\\w]*)\\((.*)",
 			"captures": {
-				"1": { "name": "entity.name.function.rlox" },
+				"1": { "name": "entity.name.function.rsl" },
 				"2": { "patterns": [{"include": "#arg_list" }] }
 			}
 		},
@@ -203,7 +203,7 @@
 		"call": {
 			"match": "([a-zA-Z_][\\w]*)\\((.*)?",
 			"captures": {
-				"1": { "name": "entity.name.function.rlox" },
+				"1": { "name": "entity.name.function.rsl" },
 				"2": { "patterns": [{"include": "#arg_list" }] }
 			}
 		},
@@ -220,27 +220,27 @@
 
 		"primary_string_dbl": {
 			"match": "\".*\"",
-			"name": "string.quoted.double.rlox"
+			"name": "string.quoted.double.rsl"
 		},
 
 		"primary_number": {
 			"match": "[0-9]+(.[0-9]+)?",
-			"name": "constant.numeric.rlox"
+			"name": "constant.numeric.rsl"
 		},
 
 		"primary_constants": {
 			"match": "(true|false|nil)",
-			"name": "constant.language.rlox"
+			"name": "constant.language.rsl"
 		},
 
 		"primary_reserved": {
 			"match": "(super|this)",
-			"name": "keyword.other.rlox"
+			"name": "keyword.other.rsl"
 		},
 
 		"primary_identifier": {
 			"patterns": [{
-				"name": "variable.other.rlox",
+				"name": "variable.other.rsl",
 				"match": "[a-zA-Z_][\\w]*"
 			}]
 		},
@@ -256,12 +256,12 @@
 		"param_list": {
 			"match": "([a-zA-Z_][\\w]*)(, ([a-zA-Z_][\\w]*))*",
 			"captures": {
-				"1": { "name": "variable.parameter.rlox" },
-				"3": { "name": "variable.parameter.rlox" }
+				"1": { "name": "variable.parameter.rsl" },
+				"3": { "name": "variable.parameter.rsl" }
 			}
 		}
 
 
 	},
-	"scopeName": "source.rlox"
+	"scopeName": "source.rsl"
 }

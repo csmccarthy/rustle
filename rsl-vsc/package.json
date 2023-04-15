@@ -1,7 +1,7 @@
 {
-  "name": "rlox-lang",
-  "displayName": "rlox lang",
-  "description": "rlox syntax highlighting",
+  "name": "rsl-vsc",
+  "displayName": "rsl vsc",
+  "description": "rsl syntax highlighting",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.75.0"
@@ -16,22 +16,24 @@
   "contributes": {
     "languages": [
       {
-        "id": "rlox",
+        "id": "rsl",
         "aliases": [
-          "RLox",
-          "rlox"
+          "Rsl",
+          "rsl",
+          "Rustle",
+          "rustle"
         ],
         "extensions": [
-          ".rulox"
+          ".rsl"
         ],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "rlox",
-        "scopeName": "source.rlox",
-        "path": "./syntaxes/rlox.tmLanguage.json"
+        "language": "rsl",
+        "scopeName": "source.rsl",
+        "path": "./syntaxes/rsl.tmLanguage.json"
       }
     ]
   }
