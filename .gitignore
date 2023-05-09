@@ -1,1 +1,7 @@
 /rsl-lang/target
+/ruscle/CMakeFiles
+/ruscle/*.cmake
+/ruscle/CMakeCache.txt
+/ruscle/.vscode
+/ruscle/Makefile
+/ruscle/build
